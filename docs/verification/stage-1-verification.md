@@ -4,23 +4,39 @@
 
 本階段專注於建立專案基礎架構、核心型別定義，並進行早期 Cursor 整合驗證，確保 MCP 伺服器基本框架能正常運作。
 
-## Task 1.1: 專案初始化 - 測試驗證
+## Task 1.1: 專案初始化 - 測試驗證 ✅ (已完成於 2025-06-10)
 
 ### 基本功能驗證
 
 ```bash
-npm run build  # 確認 TypeScript 編譯成功
-npm test      # 確認測試框架運作正常
-npm run test:coverage  # 確認覆蓋率報告生成
+npm run build         # 確認 TypeScript 編譯成功
+npm test             # 確認測試框架運作正常
+npm run test:coverage # 確認覆蓋率報告生成
 ```
 
 ### 驗證標準
 
-- [ ] TypeScript 編譯無錯誤
-- [ ] Jest 測試框架正常啟動
-- [ ] 覆蓋率報告正確生成
-- [ ] 所有必要目錄結構建立完成
-- [ ] 依賴套件正確安裝
+- [x] TypeScript 編譯無錯誤 ✅
+- [x] Jest 測試框架正常啟動 ✅
+- [x] 覆蓋率報告正確生成 ✅
+- [x] 所有必要目錄結構建立完成 ✅
+- [x] 依賴套件正確安裝 ✅
+
+### 實際驗證結果
+
+**✅ 成功項目：**
+- TypeScript 編譯成功，無錯誤或警告
+- Jest 測試框架正常運作，通過 2 個基本測試
+- 覆蓋率報告正確生成
+- 專案目錄結構完整：`src/`, `dist/`, `tests/`, `tests/unit/`, `tests/integration/`, `tests/fixtures/`
+- 所有依賴正確安裝，包括：
+  - 核心依賴：`@modelcontextprotocol/sdk ^1.12.1`
+  - 開發依賴：`typescript ^5.8.3`, `jest ^29.7.0`, `ts-jest ^29.2.5` 等
+
+**🔧 解決的問題：**
+- Jest 配置最佳化：移除過時的 `globals` 設定，採用新的 `transform` 配置
+- 移除無效的 `moduleNameMapping` 配置選項
+- 建立基本的 `src/index.ts` 檔案以支援 TypeScript 編譯
 
 ## Task 1.2: 核心型別定義與測試設定 - 測試驗證
 
@@ -99,9 +115,9 @@ npm run build
 
 ### 技術驗證
 
-- [ ] 專案結構完整建立
-- [ ] TypeScript 環境正確配置
-- [ ] 測試框架正常運作
+- [x] 專案結構完整建立 ✅
+- [x] TypeScript 環境正確配置 ✅
+- [x] 測試框架正常運作 ✅
 - [ ] 核心型別定義完成
 - [ ] 基礎 MCP 伺服器可運行
 
@@ -114,10 +130,10 @@ npm run build
 
 ### 品質標準
 
-- [ ] 程式碼編譯無警告
-- [ ] 測試覆蓋率 > 80%
-- [ ] 無 TypeScript 型別錯誤
-- [ ] 依賴版本鎖定正確
+- [x] 程式碼編譯無警告 ✅
+- [x] 測試覆蓋率 > 80% ✅ (目前 100%)
+- [x] 無 TypeScript 型別錯誤 ✅
+- [x] 依賴版本鎖定正確 ✅
 
 ## 故障排除指南
 
@@ -138,10 +154,23 @@ npm run build
    - 確認 JSON-RPC 協議實作
    - 檢查錯誤處理邏輯
 
+4. **Jest 配置警告** ✅ (已解決)
+   - 更新為新的 `transform` 配置格式
+   - 移除無效的配置選項
+
 ### 除錯步驟
 
 1. 檢查建置輸出
 2. 執行單元測試
 3. 查看 Cursor 開發者工具
 4. 檢查 MCP 伺服器日誌
-5. 驗證 JSON-RPC 訊息格式 
+5. 驗證 JSON-RPC 訊息格式
+
+## 下一步行動
+
+由於 Task 1.1 已完成，接下來應該：
+
+1. **立即開始 Task 1.2**：定義核心型別 (`src/types.ts`)
+2. **建立測試資料**：創建 `tests/fixtures/sample-holidays.json`
+3. **設定測試工具**：建立 `tests/utils/test-helpers.ts`
+4. **準備 Task 1.3**：規劃基礎 MCP 伺服器實作 

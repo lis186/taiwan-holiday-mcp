@@ -1,0 +1,116 @@
+[
+  {
+    "date": "20240101",
+    "week": "一",
+    "isHoliday": true,
+    "description": "開國紀念日"
+  },
+  {
+    "date": "20240102",
+    "week": "二",
+    "isHoliday": false,
+    "description": ""
+  },
+  {
+    "date": "20240103",
+    "week": "三",
+    "isHoliday": false,
+    "description": ""
+  },
+  {
+    "date": "20240208",
+    "week": "四",
+    "isHoliday": true,
+    "description": "農曆除夕前一日"
+  },
+  {
+    "date": "20240209",
+    "week": "五",
+    "isHoliday": true,
+    "description": "農曆除夕"
+  },
+  {
+    "date": "20240210",
+    "week": "六",
+    "isHoliday": true,
+    "description": "春節"
+  },
+  {
+    "date": "20240211",
+    "week": "日",
+    "isHoliday": true,
+    "description": "春節"
+  },
+  {
+    "date": "20240212",
+    "week": "一",
+    "isHoliday": true,
+    "description": "春節"
+  },
+  {
+    "date": "20240213",
+    "week": "二",
+    "isHoliday": true,
+    "description": "春節"
+  },
+  {
+    "date": "20240214",
+    "week": "三",
+    "isHoliday": true,
+    "description": "春節"
+  },
+  {
+    "date": "20240217",
+    "week": "六",
+    "isHoliday": false,
+    "description": "補行上班"
+  },
+  {
+    "date": "20240228",
+    "week": "三",
+    "isHoliday": true,
+    "description": "和平紀念日"
+  },
+  {
+    "date": "20240404",
+    "week": "四",
+    "isHoliday": true,
+    "description": "兒童節及民族掃墓節"
+  },
+  {
+    "date": "20240405",
+    "week": "五",
+    "isHoliday": true,
+    "description": "民族掃墓節調整放假"
+  },
+  {
+    "date": "20240501",
+    "week": "三",
+    "isHoliday": true,
+    "description": "勞動節"
+  },
+  {
+    "date": "20240610",
+    "week": "一",
+    "isHoliday": true,
+    "description": "端午節"
+  },
+  {
+    "date": "20240917",
+    "week": "二",
+    "isHoliday": true,
+    "description": "中秋節"
+  },
+  {
+    "date": "20241010",
+    "week": "四",
+    "isHoliday": true,
+    "description": "國慶日"
+  },
+  {
+    "date": "20241011",
+    "week": "五",
+    "isHoliday": true,
+    "description": "國慶日調整放假"
+  }
+] 

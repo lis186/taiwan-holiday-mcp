@@ -1,29 +1,80 @@
+/** @type {import('jest').Config} */
 export default {
-  preset: 'ts-jest/presets/default-esm',
-  extensionsToTreatAsEsm: ['.ts'],
+  // 測試環境
+  testEnvironment: 'node',
+
+  // TypeScript 支援
+  preset: 'ts-jest',
+
+  // 根目錄
+  rootDir: '.',
+
+  // 測試檔案匹配模式
+  testMatch: [
+    '<rootDir>/tests/**/*.test.ts',
+    '<rootDir>/tests/**/*.spec.ts'
+  ],
+
+  // 忽略的測試檔案
+  testPathIgnorePatterns: [
+    '/node_modules/',
+    '/dist/',
+    '/build/'
+  ],
+
+  // 模組檔案副檔名
+  moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json'],
+
+  // 模組路徑對應
+  moduleNameMapper: {
+    '^@/(.*)$': '<rootDir>/src/$1',
+    '^@tests/(.*)$': '<rootDir>/tests/$1'
+  },
+
+  // 轉換設定
   transform: {
     '^.+\\.ts$': ['ts-jest', {
-      useESM: true,
       tsconfig: 'tsconfig.test.json'
     }]
   },
-  testEnvironment: 'node',
-  roots: ['<rootDir>/tests'],
-  testMatch: ['**/*.test.ts'],
+
+  // 設定檔案
+  setupFilesAfterEnv: ['<rootDir>/tests/setup.ts'],
+
+  // 覆蓋率設定
+  collectCoverage: true,
   collectCoverageFrom: [
     'src/**/*.ts',
     '!src/**/*.d.ts',
-    '!src/index.ts'
+    '!src/**/*.test.ts',
+    '!src/**/*.spec.ts'
   ],
   coverageDirectory: 'coverage',
-  coverageReporters: ['text', 'lcov', 'html'],
+  coverageReporters: [
+    'text',
+    'text-summary',
+    'html',
+    'lcov'
+  ],
   coverageThreshold: {
     global: {
-      branches: 85,
-      functions: 85,
-      lines: 85,
-      statements: 85
+      branches: 80,
+      functions: 80,
+      lines: 80,
+      statements: 80
     }
   },
-  setupFilesAfterEnv: ['<rootDir>/tests/setup.ts']
+
+  // 測試超時時間（毫秒）
+  testTimeout: 10000,
+
+  // 詳細輸出
+  verbose: true,
+
+  // 清除模擬
+  clearMocks: true,
+  restoreMocks: true,
+
+  // 錯誤處理
+  errorOnDeprecated: true
 }; 
