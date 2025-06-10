@@ -4,15 +4,17 @@
 
 ### 1.1 技術棧
 
-- **開發語言**：TypeScript 5.6+
+- **開發語言**：TypeScript 5.8.3
 - **執行環境**：Node.js 18+
-- **MCP SDK**：@modelcontextprotocol/sdk ^1.0.1
+- **MCP SDK**：@modelcontextprotocol/sdk ^1.12.1 ✅ (已升級)
 - **資料來源**：TaiwanCalendar GitHub Repository
 - **資料 CDN**：`https://cdn.jsdelivr.net/gh/ruyut/TaiwanCalendar/data/{year}.json`
 - **套件管理**：npm
 - **建置工具**：TypeScript Compiler (tsc)
 - **執行方式**：npx 直接執行
 - **目標客戶端**：Claude Desktop, Cursor, Windsurf
+- **測試框架**：Jest 29.7.0 with ts-jest 29.2.5
+- **測試覆蓋率**：77.84% (120 個測試，100% 通過率)
 
 ### 1.2 簡化專案結構（MVP）
 
@@ -22,10 +24,22 @@ taiwan-holiday-mcp-server/
 │   ├── index.ts                 # 主要入口點
 │   ├── server.ts               # MCP 伺服器實作
 │   ├── holiday-service.ts      # 假期資料服務
-│   └── types.ts                # 型別定義
+│   ├── types.ts                # 型別定義
+│   └── utils/                  # 工具函數
+│       └── date-parser.ts      # 日期解析工具
+├── tests/                      # 測試目錄
+│   ├── unit/                   # 單元測試
+│   ├── integration/            # 整合測試
+│   └── fixtures/               # 測試資料
+├── docs/                       # 文件目錄
+│   ├── plan.md                 # 開發計劃
+│   ├── spec.md                 # 技術規格
+│   ├── PRD.md                  # 產品需求
+│   └── verification/           # 驗證文件
 ├── dist/                       # 編譯輸出目錄
 ├── package.json
 ├── tsconfig.json
+├── jest.config.js              # Jest 配置
 ├── README.md
 └── .gitignore
 ```
@@ -84,24 +98,25 @@ taiwan-holiday-mcp-server/
 ```typescript
 {
   name: "get_holiday_stats",
-  description: "取得假期統計資訊",
+  description: "獲取指定年份或年月的台灣假期統計資訊",
   inputSchema: {
     type: "object",
     properties: {
       year: {
-        type: "number",
-        description: "年份",
-        minimum: 2020,
-        maximum: 2030
+        type: "integer",
+        description: "要查詢的年份",
+        minimum: 2017,
+        maximum: 2025
       },
       month: {
-        type: "number",
-        description: "月份（可選）",
+        type: "integer",
+        description: "要查詢的月份（可選），1-12",
         minimum: 1,
         maximum: 12
       }
     },
-    required: ["year"]
+    required: ["year"],
+    additionalProperties: false
   }
 }
 ```
@@ -472,26 +487,45 @@ private async handleGetHolidayStats(args: any): Promise<MCPResponse>
 
 ```json
 {
-  "name": "taiwan-holiday-mcp-server",
+  "name": "taiwan-holiday-mcp",
   "version": "1.0.0",
   "type": "module",
   "bin": {
-    "taiwan-holiday-mcp-server": "./dist/index.js"
+    "taiwan-holiday-mcp": "./dist/index.js"
   },
   "files": [
     "dist",
     "README.md"
   ],
   "scripts": {
-    "build": "tsc",
-    "start": "node dist/index.js"
+    "build": "tsc && shx chmod +x dist/*.js",
+    "build:watch": "tsc --watch",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "lint": "eslint src/**/*.ts",
+    "lint:fix": "eslint src/**/*.ts --fix",
+    "prepare": "npm run build",
+    "prepublishOnly": "npm run test && npm run build"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.0.1"
+    "@modelcontextprotocol/sdk": "^1.12.1"
   },
   "devDependencies": {
-    "@types/node": "^22",
-    "typescript": "^5.6.2"
+    "@types/jest": "^29.5.14",
+    "@types/node": "^22.10.2",
+    "@typescript-eslint/eslint-plugin": "^8.18.2",
+    "@typescript-eslint/parser": "^8.18.2",
+    "eslint": "^9.17.0",
+    "jest": "^29.7.0",
+    "nock": "^13.5.6",
+    "shx": "^0.4.0",
+    "supertest": "^7.0.0",
+    "ts-jest": "^29.2.5",
+    "typescript": "^5.8.3"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 }
 ```
