@@ -1,0 +1,10 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+以下是我的意圖，先別執行，幫我最佳化 prompt。
+
+{原來使用者輸入的 prompt}
+
+注意！先別執行！先別執行！先別執行！，產出改善的 prompt 之後，立刻呼叫 interactive-feedback-mcp。
