@@ -11,24 +11,36 @@
 ```typescript
 // tests/unit/holiday-service.test.ts
 import { HolidayService } from '../../src/holiday-service';
-import nock from 'nock';
-import holidayData from '../fixtures/taiwan-holidays-2024.json';
+import { readFileSync } from 'fs';
+import { join } from 'path';
+
+// 載入測試資料
+const testHolidays = JSON.parse(
+  readFileSync(join(process.cwd(), 'tests/fixtures/taiwan-holidays-2024.json'), 'utf-8')
+);
+
+// Mock fetch
+const mockFetch = jest.fn();
+global.fetch = mockFetch;
 
 describe('HolidayService', () => {
   let service: HolidayService;
 
   beforeEach(() => {
     service = new HolidayService();
-    nock.cleanAll();
+    service.clearCache(); // 清除快取確保測試獨立性
+    mockFetch.mockClear();
   });
 
-  describe('getYearData', () => {
+  describe('getHolidaysForYear', () => {
     test('應成功獲取年度資料', async () => {
-      nock('https://cdn.jsdelivr.net')
-        .get('/gh/ruyut/TaiwanCalendar/data/2024.json')
-        .reply(200, holidayData);
+      // 模擬成功的 HTTP 回應
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => testHolidays
+      });
 
-      const data = await service.getYearData(2024);
+      const data = await service.getHolidaysForYear(2024);
       expect(Array.isArray(data)).toBe(true);
       expect(data.length).toBeGreaterThan(0);
       expect(data[0]).toHaveProperty('date');
@@ -36,31 +48,61 @@ describe('HolidayService', () => {
     });
 
     test('應處理網路錯誤', async () => {
-      nock('https://cdn.jsdelivr.net')
-        .get('/gh/ruyut/TaiwanCalendar/data/2024.json')
-        .replyWithError('Network error');
+      // 模擬網路錯誤
+      mockFetch.mockRejectedValue(new Error('Network error'));
 
-      await expect(service.getYearData(2024))
-        .rejects.toThrow('Failed to fetch holiday data');
+      await expect(service.getHolidaysForYear(2024))
+        .rejects.toThrow('HolidayServiceError');
     });
 
     test('應使用快取機制', async () => {
-      nock('https://cdn.jsdelivr.net')
-        .get('/gh/ruyut/TaiwanCalendar/data/2024.json')
-        .once()
-        .reply(200, holidayData);
-
       // 第一次請求
-      await service.getYearData(2024);
-      // 第二次請求應使用快取
-      const data = await service.getYearData(2024);
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => testHolidays
+      });
+
+      await service.getHolidaysForYear(2024);
+      
+      // 第二次請求應使用快取，不會再次呼叫 fetch
+      const data = await service.getHolidaysForYear(2024);
       expect(data).toBeDefined();
+      expect(mockFetch).toHaveBeenCalledTimes(1); // 只呼叫一次
+    });
+
+    test('應處理請求超時', async () => {
+      const timeoutService = new HolidayService({ timeout: 100, retries: 1 });
+      
+      // 模擬 AbortError 來觸發超時
+      const abortError = Object.assign(new Error('The operation was aborted'), {
+        name: 'AbortError'
+      });
+      mockFetch.mockRejectedValue(abortError);
+
+      await expect(timeoutService.getHolidaysForYear(2024))
+        .rejects.toThrow('HolidayServiceError');
     });
   });
 
   describe('快取機制測試', () => {
     test('快取應在 TTL 後過期', async () => {
-      // 測試快取過期邏輯
+      const shortTtlService = new HolidayService({ cacheTtl: 100 }); // 100ms TTL
+      
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => testHolidays
+      });
+
+      // 第一次請求
+      await shortTtlService.getHolidaysForYear(2024);
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+
+      // 等待快取過期
+      await new Promise(resolve => setTimeout(resolve, 150));
+
+      // 第二次請求應重新獲取資料
+      await shortTtlService.getHolidaysForYear(2024);
+      expect(mockFetch).toHaveBeenCalledTimes(2);
     });
   });
 });
@@ -96,12 +138,12 @@ describe('DateParser', () => {
 
 ### 驗證標準
 
-- [ ] HolidayService 類別正確實作
-- [ ] CDN 資料獲取功能正常
-- [ ] 錯誤處理機制完善
-- [ ] 快取機制正常運作
-- [ ] 日期解析功能正確
-- [ ] 測試資料和模擬設定完成
+- [x] HolidayService 類別正確實作 ✅
+- [x] CDN 資料獲取功能正常 ✅
+- [x] 錯誤處理機制完善 ✅
+- [x] 快取機制正常運作 ✅
+- [x] 日期解析功能正確 ✅
+- [x] 測試資料和模擬設定完成（使用 Jest mock）✅
 
 ## Task 2.2: 核心查詢方法與整合測試 - 測試驗證
 
@@ -111,13 +153,19 @@ describe('DateParser', () => {
 // tests/unit/holiday-service-methods.test.ts
 describe('HolidayService 查詢方法', () => {
   let service: HolidayService;
+  const mockFetch = jest.fn();
 
   beforeEach(async () => {
     service = new HolidayService();
+    service.clearCache();
+    mockFetch.mockClear();
+    global.fetch = mockFetch;
+    
     // 預載測試資料
-    nock('https://cdn.jsdelivr.net')
-      .get('/gh/ruyut/TaiwanCalendar/data/2024.json')
-      .reply(200, require('../fixtures/taiwan-holidays-2024.json'));
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => require('../fixtures/taiwan-holidays-2024.json')
+    });
   });
 
   describe('checkHoliday', () => {
@@ -310,6 +358,17 @@ npm run build
    - 檢查 MCP 工具註冊
    - 確認參數傳遞正確
    - 查看錯誤日誌
+
+5. **Jest Mock 測試問題**
+   - 確認 `global.fetch` 正確模擬
+   - 檢查 `mockFetch.mockClear()` 在 beforeEach 中執行
+   - 驗證 mock 回應格式正確
+   - 使用 `mockFetch.mockResolvedValue()` 而非 `mockImplementation()`
+
+6. **ESM 模組解析錯誤**
+   - 檢查 `jest.config.js` 中的 `moduleNameMapper` 設定
+   - 確認 `extensionsToTreatAsEsm: ['.ts']` 配置
+   - 驗證 import 路徑使用 `.js` 副檔名
 
 ### 效能最佳化
 
