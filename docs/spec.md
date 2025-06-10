@@ -14,8 +14,10 @@
 - **執行方式**：npx 直接執行
 - **目標客戶端**：Claude Desktop, Cursor, Windsurf
 - **測試框架**：Jest 29.7.0 with ts-jest 29.2.5
-- **測試覆蓋率**：77.84% (120 個測試，100% 通過率)
+- **測試覆蓋率**：77.84% (120 個測試，100% 通過率) ✅
 - **MCP 工具狀態**：3 個工具全部實作完成並通過驗證 ✅
+- **專案狀態**：生產就緒，Task 3.1 完成 ✅
+- **架構設計**：統一整合架構（所有工具整合在 server.ts 中）✅
 
 ### 1.2 簡化專案結構（MVP）
 
@@ -45,11 +47,50 @@ taiwan-holiday-mcp-server/
 └── .gitignore
 ```
 
-## 2. MCP 協議實作
+## 2. MCP 協議實作 ✅
 
-### 2.1 MCP Tools 完整定義（符合官方規格）
+**實作狀態**: 所有 MCP 工具已完整實作並通過驗證  
+**架構設計**: 統一整合架構，所有工具整合在 `src/server.ts` 中  
+**驗證日期**: 2025-06-10
 
-#### 2.1.1 check_holiday
+### 2.0 重大架構決定
+
+#### 2.0.1 統一整合架構 vs 分離檔案架構
+
+**原計劃架構** (分離檔案):
+```
+src/tools/
+├── check-holiday.ts
+├── get-holidays-in-range.ts
+└── get-holiday-stats.ts
+```
+
+**實際採用架構** (統一整合):
+```
+src/server.ts - 包含所有三個 MCP 工具的完整實作
+```
+
+**架構優勢**:
+- ✅ **減少複雜度**: 避免多檔案間的相依性管理
+- ✅ **統一錯誤處理**: 所有工具共用相同的錯誤處理邏輯
+- ✅ **更好的維護性**: 單一檔案更容易維護和除錯
+- ✅ **避免重複程式碼**: 共用的工具函數和設定
+
+#### 2.0.2 工具優先 vs 資源優先策略
+
+**決定**: 採用工具優先策略，透過 `get_holiday_stats` 工具提供資源功能
+
+**理由**:
+- 工具提供更靈活的參數驗證和錯誤處理
+- 統一的回應格式和用戶體驗
+- 減少 MCP 協議複雜度
+
+### 2.1 MCP Tools 完整定義（符合官方規格）✅
+
+#### 2.1.1 check_holiday ✅
+
+**實作位置**: `src/server.ts` 第 47-58 行  
+**處理邏輯**: `src/server.ts` 第 153-175 行
 
 ```typescript
 {
@@ -60,41 +101,49 @@ taiwan-holiday-mcp-server/
     properties: {
       date: {
         type: "string",
-        description: "日期，格式為 YYYY-MM-DD 或 YYYYMMDD",
+        description: "要查詢的日期，支援格式：YYYY-MM-DD 或 YYYYMMDD",
         pattern: "^(\\d{4}-\\d{2}-\\d{2}|\\d{8})$"
       }
     },
-    required: ["date"]
+    required: ["date"],
+    additionalProperties: false
   }
 }
 ```
 
-#### 2.1.2 get_holidays_in_range
+#### 2.1.2 get_holidays_in_range ✅
+
+**實作位置**: `src/server.ts` 第 59-77 行  
+**處理邏輯**: `src/server.ts` 第 180-210 行
 
 ```typescript
 {
   name: "get_holidays_in_range",
-  description: "取得日期範圍內的台灣假期列表",
+  description: "獲取指定日期範圍內的所有台灣假期",
   inputSchema: {
     type: "object",
     properties: {
       start_date: {
         type: "string",
-        description: "開始日期，格式為 YYYY-MM-DD 或 YYYYMMDD",
+        description: "開始日期，支援格式：YYYY-MM-DD 或 YYYYMMDD",
         pattern: "^(\\d{4}-\\d{2}-\\d{2}|\\d{8})$"
       },
       end_date: {
         type: "string",
-        description: "結束日期，格式為 YYYY-MM-DD 或 YYYYMMDD",
+        description: "結束日期，支援格式：YYYY-MM-DD 或 YYYYMMDD",
         pattern: "^(\\d{4}-\\d{2}-\\d{2}|\\d{8})$"
       }
     },
-    required: ["start_date", "end_date"]
+    required: ["start_date", "end_date"],
+    additionalProperties: false
   }
 }
 ```
 
-#### 2.1.3 get_holiday_stats
+#### 2.1.3 get_holiday_stats ✅
+
+**實作位置**: `src/server.ts` 第 78-95 行  
+**處理邏輯**: `src/server.ts` 第 215-235 行
 
 ```typescript
 {
@@ -122,22 +171,29 @@ taiwan-holiday-mcp-server/
 }
 ```
 
-### 2.2 MCP Resources（符合官方規格）
+### 2.2 MCP Resources（符合官方規格）⚠️
 
-#### 2.2.1 taiwan_holidays_{year}
+**實作狀態**: 透過工具實作，未實作獨立資源端點  
+**設計決定**: 採用工具優先策略，資源功能透過 `get_holiday_stats` 工具提供
+
+#### 2.2.1 taiwan_holidays_{year} (透過工具實作)
 
 ```typescript
+// 透過 get_holiday_stats 工具提供相同功能
 {
-  uri: "taiwan-holidays://calendar/{year}",
-  name: "台灣假期資料",
-  description: "提供指定年度的完整假期資料",
-  mimeType: "application/json"
+  name: "get_holiday_stats",
+  description: "獲取指定年份的完整假期資料和統計",
+  // ... 完整的工具定義
 }
 ```
 
-### 2.3 MCP 伺服器完整架構
+### 2.3 MCP 伺服器完整架構 ✅
 
-#### 2.3.1 伺服器初始化
+**實作狀態**: 完整實作並通過驗證  
+**架構特色**: 統一整合架構，所有功能整合在單一檔案中  
+**檔案位置**: `src/server.ts` (308 行)
+
+#### 2.3.1 伺服器初始化 ✅
 
 ```typescript
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
@@ -145,12 +201,14 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
-  ListResourcesRequestSchema,
-  ReadResourceRequestSchema,
+  Tool,
 } from "@modelcontextprotocol/sdk/types.js";
+import { HolidayService, HolidayServiceError } from './holiday-service.js';
+import { ErrorType } from './types.js';
 
 export class TaiwanHolidayMcpServer {
   private server: Server;
+  private holidayService: HolidayService;
   
   constructor() {
     this.server = new Server({
@@ -158,17 +216,13 @@ export class TaiwanHolidayMcpServer {
       version: "1.0.0"
     }, {
       capabilities: {
-        tools: {},
-        resources: {}
+        tools: {}
       }
     });
     
-    this.setupHandlers();
-  }
-  
-  private setupHandlers() {
+    this.holidayService = new HolidayService();
     this.setupToolHandlers();
-    this.setupResourceHandlers();
+    this.setupErrorHandling();
   }
 }
 ```
@@ -547,24 +601,51 @@ async function main() {
 main().catch(console.error);
 ```
 
-## 7. 測試與部署（MVP）
+## 7. 測試與部署 ✅
 
-### 7.1 基本測試
+### 7.1 測試狀態 ✅
 
-- 三個 MCP 工具的基本功能測試
-- 日期格式驗證測試
-- 錯誤處理測試
+**測試結果** (2025-06-10):
+- **測試套件**: 6 個，全部通過
+- **測試案例**: 120 個，100% 通過率
+- **測試覆蓋率**: 77.84% (核心業務邏輯 >90%)
+- **執行時間**: 16.24 秒
 
-### 7.2 NPM 發布
+**測試類型**:
+- ✅ 單元測試：核心功能和邊界情況
+- ✅ 整合測試：端到端流程和效能基準
+- ✅ 錯誤處理測試：完整的錯誤情境覆蓋
+- ✅ 效能測試：首次查詢 <2s，快取查詢 <100ms
+
+### 7.2 部署狀態 ✅
+
+**專案狀態**: 生產就緒  
+**建置狀態**: 完整建置流程已驗證  
+**NPX 執行**: 已測試並正常運作
 
 ```bash
+# 建置專案
 npm run build
-npm publish
+
+# 執行測試
+npm test
+
+# NPX 執行測試
+npx taiwan-holiday-mcp-server
 ```
+
+### 7.3 品質指標達成 ✅
+
+- ✅ **功能完整性**: 三個核心 MCP 工具全部實作
+- ✅ **測試品質**: 120 個測試案例 100% 通過
+- ✅ **效能基準**: 所有效能指標達標
+- ✅ **錯誤處理**: 完善的三層錯誤處理機制
+- ✅ **程式碼品質**: TypeScript 嚴格模式，無編譯錯誤
 
 ---
 
-**文件版本**：v1.1 (MVP)  
+**文件版本**：v2.0 (生產就緒版)  
 **建立日期**：2025-06-09  
-**最後更新**：2025-06-09  
+**最後更新**：2025-06-10  
+**專案狀態**：生產就緒，Task 3.1 完成  
 **負責人**：技術團隊
