@@ -134,18 +134,18 @@ graph TD
 
 **測試驗證：** [階段 2 驗證標準](./verification/stage-2-verification.md#task-22-核心查詢方法與整合測試---測試驗證) ✅
 
-#### Task 2.3: 🚀 中期 Cursor 驗證點
+#### Task 2.3: 🚀 中期 Cursor 驗證點 ✅ (完成於 2025-06-10)
 
-- [ ] **T2.3.1** 擴展 MCP 伺服器 (`src/server.ts`)
-  - [ ] **T2.3.1.1** 整合 `HolidayService`
-  - [ ] **T2.3.1.2** 將 `ping` 工具替換為 `check_holiday` 工具
-  - [ ] **T2.3.1.3** 新增 `get_holidays_range` 工具
-  - [ ] **T2.3.1.4** 完善錯誤處理和驗證
-- [ ] **T2.3.2** 更新相關依賴
-  - [ ] **T2.3.2.1** 確保非同步操作正常
-  - [ ] **T2.3.2.2** 改善錯誤訊息格式
+- [x] **T2.3.1** 擴展 MCP 伺服器 (`src/server.ts`) ✅
+  - [x] **T2.3.1.1** 整合 `HolidayService` ✅
+  - [x] **T2.3.1.2** 將 `ping` 工具替換為 `check_holiday` 工具 ✅
+  - [x] **T2.3.1.3** 新增 `get_holidays_range` 工具 ✅
+  - [x] **T2.3.1.4** 完善錯誤處理和驗證 ✅
+- [x] **T2.3.2** 更新相關依賴 ✅
+  - [x] **T2.3.2.1** 確保非同步操作正常 ✅
+  - [x] **T2.3.2.2** 改善錯誤訊息格式 ✅
 
-**🎯 Cursor 整合測試：** [階段 2 驗證標準](./verification/stage-2-verification.md#task-23-中期-cursor-驗證點)
+**🎯 Cursor 整合測試：** [階段 2 驗證標準](./verification/stage-2-verification.md#task-23-中期-cursor-驗證點) ✅
 
 ### 階段 3：MCP 工具實作 (4 小時)
 
@@ -338,7 +338,7 @@ graph TD
 ## 時間分配總覽
 
 - **階段 1**：專案基礎建設 + 早期 Cursor 整合 ✅ (3.5 小時)
-- **階段 2**：資料服務層實作 + 中期 Cursor 驗證 ✅ (5.5 小時)
+- **階段 2**：資料服務層實作 + 中期 Cursor 驗證 ✅ (5.5 小時) - **完成於 2025-06-10**
 - **階段 3**：MCP 工具實作 ✅ (4 小時)
 - **階段 4**：MCP 協議整合 + 最終 Cursor 驗證 ✅ (已在階段 3 完成)
 - **階段 5**：NPX 套件設定 ✅ (已在階段 3 完成)
