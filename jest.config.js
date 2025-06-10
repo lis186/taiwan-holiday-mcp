@@ -4,7 +4,8 @@ export default {
   testEnvironment: 'node',
 
   // TypeScript 支援
-  preset: 'ts-jest',
+  preset: 'ts-jest/presets/default-esm',
+  extensionsToTreatAsEsm: ['.ts'],
 
   // 根目錄
   rootDir: '.',
@@ -34,6 +35,7 @@ export default {
   // 轉換設定
   transform: {
     '^.+\\.ts$': ['ts-jest', {
+      useESM: true,
       tsconfig: 'tsconfig.test.json'
     }]
   },
