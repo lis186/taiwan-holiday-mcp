@@ -5,7 +5,11 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
+  ListResourcesRequestSchema,
+  ReadResourceRequestSchema,
   Tool,
+  Resource,
+  TextResourceContents,
 } from '@modelcontextprotocol/sdk/types.js';
 import { HolidayService, HolidayServiceError } from './holiday-service.js';
 import { ErrorType } from './types.js';
@@ -29,6 +33,7 @@ export class TaiwanHolidayMcpServer {
       {
         capabilities: {
           tools: {},
+          resources: {},
         },
       }
     );
@@ -37,6 +42,7 @@ export class TaiwanHolidayMcpServer {
     this.holidayService = new HolidayService();
 
     this.setupToolHandlers();
+    this.setupResourceHandlers();
     this.setupErrorHandling();
   }
 
@@ -153,6 +159,210 @@ export class TaiwanHolidayMcpServer {
         };
       }
     });
+  }
+
+  /**
+   * 設定資源處理器
+   */
+  private setupResourceHandlers(): void {
+    // 列出可用資源
+    this.server.setRequestHandler(ListResourcesRequestSchema, async () => {
+      return {
+        resources: [
+          {
+            uri: 'taiwan-holidays://years',
+            name: '支援的年份列表',
+            description: '列出所有支援查詢的年份範圍',
+            mimeType: 'application/json',
+          } as Resource,
+          {
+            uri: 'taiwan-holidays://holidays/2024',
+            name: '2024年台灣假期',
+            description: '2024年完整的台灣假期資料',
+            mimeType: 'application/json',
+          } as Resource,
+          {
+            uri: 'taiwan-holidays://holidays/2025',
+            name: '2025年台灣假期',
+            description: '2025年完整的台灣假期資料',
+            mimeType: 'application/json',
+          } as Resource,
+          {
+            uri: 'taiwan-holidays://stats/2024',
+            name: '2024年假期統計',
+            description: '2024年台灣假期統計資訊',
+            mimeType: 'application/json',
+          } as Resource,
+          {
+            uri: 'taiwan-holidays://stats/2025',
+            name: '2025年假期統計',
+            description: '2025年台灣假期統計資訊',
+            mimeType: 'application/json',
+          } as Resource,
+        ],
+      };
+    });
+
+    // 讀取資源內容
+    this.server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
+      const { uri } = request.params;
+
+      try {
+        return await this.handleReadResource(uri);
+      } catch (error) {
+        console.error(`資源讀取錯誤 [${uri}]:`, error);
+        
+        const errorMessage = error instanceof Error ? error.message : '未知錯誤';
+        
+        return {
+          contents: [
+            {
+              uri: uri,
+              mimeType: 'application/json',
+              text: JSON.stringify({
+                success: false,
+                error: errorMessage,
+                timestamp: new Date().toISOString(),
+                resource: uri
+              }, null, 2),
+            } as TextResourceContents,
+          ],
+        };
+      }
+    });
+  }
+
+  /**
+   * 處理資源讀取
+   */
+  private async handleReadResource(uri: string) {
+    const parsedUri = this.parseResourceUri(uri);
+    
+    switch (parsedUri.type) {
+      case 'years':
+        return this.getYearsResource();
+      
+      case 'holidays':
+        if (!parsedUri.year) {
+          throw new Error('缺少年份參數');
+        }
+        return this.getHolidaysResource(parsedUri.year);
+      
+      case 'stats':
+        if (!parsedUri.year) {
+          throw new Error('缺少年份參數');
+        }
+        return this.getStatsResource(parsedUri.year);
+      
+      default:
+        throw new Error(`不支援的資源類型: ${uri}`);
+    }
+  }
+
+  /**
+   * 解析資源 URI
+   */
+  private parseResourceUri(uri: string): { type: string; year?: number } {
+    const match = uri.match(/^taiwan-holidays:\/\/(\w+)(?:\/(\d{4}))?$/);
+    
+    if (!match) {
+      throw new Error(`無效的資源 URI 格式: ${uri}`);
+    }
+    
+    const [, type, yearStr] = match;
+    const year = yearStr ? parseInt(yearStr, 10) : undefined;
+    
+    if (year && (year < 2017 || year > 2025)) {
+      throw new Error(`不支援的年份: ${year}。支援範圍: 2017-2025`);
+    }
+    
+    return { type, year };
+  }
+
+  /**
+   * 獲取年份列表資源
+   */
+  private getYearsResource() {
+    const years = [];
+    for (let year = 2017; year <= 2025; year++) {
+      years.push(year);
+    }
+    
+    return {
+      contents: [
+        {
+          uri: 'taiwan-holidays://years',
+          mimeType: 'application/json',
+          text: JSON.stringify({
+            success: true,
+            data: {
+              supportedYears: years,
+              totalYears: years.length,
+              description: '台灣假期 MCP 伺服器支援的年份範圍',
+              note: '資料來源：TaiwanCalendar'
+            },
+            timestamp: new Date().toISOString(),
+            resource: 'years'
+          }, null, 2),
+        } as TextResourceContents,
+      ],
+    };
+  }
+
+  /**
+   * 獲取假期資源
+   */
+  private async getHolidaysResource(year: number) {
+    const holidays = await this.holidayService.getHolidaysForYear(year);
+    
+    return {
+      contents: [
+        {
+          uri: `taiwan-holidays://holidays/${year}`,
+          mimeType: 'application/json',
+          text: JSON.stringify({
+            success: true,
+            data: {
+              year: year,
+              holidays: holidays,
+              totalCount: holidays.length,
+              holidayCount: holidays.filter(h => h.isHoliday).length,
+              description: `${year}年台灣假期完整資料`,
+              source: 'TaiwanCalendar'
+            },
+            timestamp: new Date().toISOString(),
+            resource: `holidays/${year}`
+          }, null, 2),
+        } as TextResourceContents,
+      ],
+    };
+  }
+
+  /**
+   * 獲取統計資源
+   */
+  private async getStatsResource(year: number) {
+    const stats = await this.holidayService.getHolidayStats(year);
+    
+    return {
+      contents: [
+        {
+          uri: `taiwan-holidays://stats/${year}`,
+          mimeType: 'application/json',
+          text: JSON.stringify({
+            success: true,
+            data: {
+              year: year,
+              statistics: stats,
+              description: `${year}年台灣假期統計資訊`,
+              source: 'TaiwanCalendar'
+            },
+            timestamp: new Date().toISOString(),
+            resource: `stats/${year}`
+          }, null, 2),
+        } as TextResourceContents,
+      ],
+    };
   }
 
   /**

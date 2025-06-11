@@ -45,6 +45,8 @@ alwaysApply: false
 2. **推薦類型**：根據變更性質推薦適當的類型和範圍
 3. **生成建議**：提供 2-3 個符合規範的 commit message 選項
 4. **格式檢查**：確認建議符合所有格式要求
+5. **讓使用者確認選擇的 commit message**：呼叫 interactive-feedback-mcp，讓使用者確認使用哪個 commit message
+6. **讓使用者確認是否 commit**： 呼叫 interactive-feedback-mcp，讓使用者確認是否 commit
 
 ## 範例模板
 
