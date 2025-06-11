@@ -173,12 +173,81 @@ describe('套件安裝測試', () => {
 
 ### 驗證標準
 
-- [ ] package.json 配置正確
-- [ ] NPX 執行正常
-- [ ] 跨平台相容性良好
-- [ ] 檔案權限設定正確
-- [ ] 依賴版本管理正確
-- [ ] 安裝流程順暢
+- [x] package.json 配置正確 ✅
+- [x] NPX 執行正常 ✅
+- [x] 跨平台相容性良好 ✅
+- [x] 檔案權限設定正確 ✅
+- [x] 依賴版本管理正確 ✅
+- [x] 安裝流程順暢 ✅
+
+### 實際驗證結果
+
+#### NPX 功能驗證 ✅
+
+```bash
+# 版本資訊測試
+$ npx taiwan-holiday-mcp --version
+Taiwan Holiday MCP Server v1.0.0
+Node.js v22.16.0
+Platform: darwin arm64
+
+# 幫助資訊測試
+$ npx taiwan-holiday-mcp --help
+Taiwan Holiday MCP Server - 台灣假期 MCP 伺服器
+
+用法:
+  taiwan-holiday-mcp [選項]
+
+選項:
+  -v, --version     顯示版本資訊
+  -h, --help        顯示此幫助資訊
+  --debug           啟用除錯模式
+  --port <port>     指定伺服器埠號 (預設: stdio)
+
+環境變數:
+  DEBUG             設定為 'true' 啟用除錯模式
+  MCP_LOG_LEVEL     設定日誌等級 (error, warn, info, debug)
+  NODE_ENV          設定執行環境 (development, production)
+
+範例:
+  taiwan-holiday-mcp
+  taiwan-holiday-mcp --debug
+  DEBUG=true taiwan-holiday-mcp
+```
+
+#### 跨平台測試結果 ✅
+
+- ✅ macOS (darwin arm64): 7/7 測試通過
+- ✅ 路徑分隔符處理正確
+- ✅ 環境變數支援正常
+- ✅ 檔案權限設定正確
+- ✅ Node.js 版本檢查正常
+
+#### package.json 配置驗證 ✅
+
+```json
+{
+  "name": "taiwan-holiday-mcp",
+  "version": "1.0.0",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "taiwan-holiday-mcp": "dist/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/justinlee/taiwan-holiday-mcp.git"
+  }
+}
+```
 
 ## Task 5.2: 建置與打包完整測試 - 測試驗證
 

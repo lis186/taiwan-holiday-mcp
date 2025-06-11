@@ -5,13 +5,20 @@
   "license": "MIT",
   "author": "Justin Lee",
   "homepage": "https://github.com/justinlee/taiwan-holiday-mcp",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/justinlee/taiwan-holiday-mcp.git"
+  },
   "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "bin": {
     "taiwan-holiday-mcp": "dist/index.js"
   },
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    "LICENSE"
   ],
   "scripts": {
     "build": "tsc && shx chmod +x dist/*.js",
