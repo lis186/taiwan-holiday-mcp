@@ -17,9 +17,10 @@ describe('跨平台相容性測試', () => {
   });
 
   test('應在當前平台正常啟動', async () => {
-    const command = platform() === 'win32' ? 'npx.cmd' : 'npx';
+    // 使用本地建置的檔案而不是 npx，因為套件還未發布
+    const indexPath = join(process.cwd(), 'dist', 'index.js');
     
-    child = spawn(command, ['taiwan-holiday-mcp', '--help'], {
+    child = spawn('node', [indexPath, '--help'], {
       stdio: ['pipe', 'pipe', 'pipe']
     });
 
@@ -55,9 +56,10 @@ describe('跨平台相容性測試', () => {
   }, 15000);
 
   test('應正確處理版本參數', async () => {
-    const command = platform() === 'win32' ? 'npx.cmd' : 'npx';
+    // 使用本地建置的檔案而不是 npx，因為套件還未發布
+    const indexPath = join(process.cwd(), 'dist', 'index.js');
     
-    child = spawn(command, ['taiwan-holiday-mcp', '--version'], {
+    child = spawn('node', [indexPath, '--version'], {
       stdio: ['pipe', 'pipe', 'pipe']
     });
 
@@ -149,9 +151,10 @@ describe('跨平台相容性測試', () => {
   });
 
   test('應正確處理除錯模式', async () => {
-    const command = platform() === 'win32' ? 'npx.cmd' : 'npx';
+    // 使用本地建置的檔案而不是 npx，因為套件還未發布
+    const indexPath = join(process.cwd(), 'dist', 'index.js');
     
-    child = spawn(command, ['taiwan-holiday-mcp', '--debug', '--version'], {
+    child = spawn('node', [indexPath, '--debug', '--version'], {
       stdio: ['pipe', 'pipe', 'pipe'],
       env: { ...process.env, DEBUG: 'true' }
     });

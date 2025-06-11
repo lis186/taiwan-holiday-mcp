@@ -88,7 +88,8 @@ describe('Task 5.2: 建置與打包完整測試', () => {
     test('應該能夠啟動 MCP 伺服器', async () => {
       const result = await runCommandWithTimeout('node', [join(distPath, 'index.js')], 1000);
       
-      expect(result.stdout).toContain('Taiwan Holiday MCP 伺服器已啟動');
+      // MCP 伺服器的啟動訊息會輸出到 stderr，避免干擾 JSON-RPC 通訊
+      expect(result.stderr).toContain('Taiwan Holiday MCP 伺服器已啟動');
     });
   });
 
@@ -97,7 +98,11 @@ describe('Task 5.2: 建置與打包完整測試', () => {
       const result = await runCommand('npm', ['run', 'package:test']);
       
       expect(result.exitCode).toBe(0);
+      // npm pack 的輸出會包含套件檔名
       expect(result.stdout).toContain('taiwan-holiday-mcp-1.0.0.tgz');
+      // 檢查建置過程是否成功
+      expect(result.stdout).toContain('prepare');
+      expect(result.stdout).toContain('build');
     });
   });
 });
