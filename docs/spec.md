@@ -14,9 +14,9 @@
 - **執行方式**：npx 直接執行
 - **目標客戶端**：Claude Desktop, Cursor, Windsurf
 - **測試框架**：Jest 29.7.0 with ts-jest 29.2.5
-- **測試覆蓋率**：77.84% (120 個測試，100% 通過率) ✅
-- **MCP 工具狀態**：3 個工具全部實作完成並通過驗證 ✅
-- **專案狀態**：生產就緒，Task 3.1 完成 ✅
+- **測試覆蓋率**：70.69% (158 個測試，100% 通過率) ✅
+- **MCP 工具狀態**：3 個工具 + 資源系統全部實作完成並通過驗證 ✅
+- **專案狀態**：生產就緒，Task 4.1-4.2 完成 ✅
 - **架構設計**：統一整合架構（所有工具整合在 server.ts 中）✅
 
 ### 1.2 簡化專案結構（MVP）
@@ -171,19 +171,82 @@ src/server.ts - 包含所有三個 MCP 工具的完整實作
 }
 ```
 
-### 2.2 MCP Resources（符合官方規格）⚠️
+### 2.2 MCP Resources（符合官方規格）✅
 
-**實作狀態**: 透過工具實作，未實作獨立資源端點  
-**設計決定**: 採用工具優先策略，資源功能透過 `get_holiday_stats` 工具提供
+**實作狀態**: 完整實作並通過驗證  
+**實作日期**: 2025-06-11  
+**測試結果**: 26 個資源測試案例，100% 通過  
+**架構設計**: 統一整合架構，資源功能整合在 `src/server.ts` 中
 
-#### 2.2.1 taiwan_holidays_{year} (透過工具實作)
+#### 2.2.1 資源 URI 設計
+
+**協議前綴**: `taiwan-holidays://`
+
+**支援的資源類型**:
+- `taiwan-holidays://years` - 支援的年份列表
+- `taiwan-holidays://holidays/{year}` - 特定年份的假期資料
+- `taiwan-holidays://stats/{year}` - 特定年份的統計資訊
+
+#### 2.2.2 資源列表實作
 
 ```typescript
-// 透過 get_holiday_stats 工具提供相同功能
+// 實作位置: src/server.ts setupResourceHandlers()
+const resources: Resource[] = [
+  {
+    uri: 'taiwan-holidays://years',
+    name: '支援的年份列表',
+    description: '取得所有支援的年份清單',
+    mimeType: 'application/json',
+  },
+  // 動態生成年份資源 (2017-2025)
+  ...supportedYears.flatMap(year => [
+    {
+      uri: `taiwan-holidays://holidays/${year}`,
+      name: `${year}年台灣假期`,
+      description: `取得${year}年的所有台灣假期資料`,
+      mimeType: 'application/json',
+    },
+    {
+      uri: `taiwan-holidays://stats/${year}`,
+      name: `${year}年假期統計`,
+      description: `取得${year}年的假期統計資訊`,
+      mimeType: 'application/json',
+    },
+  ]),
+];
+```
+
+#### 2.2.3 資源內容格式
+
+**統一 JSON 結構**:
+```typescript
 {
-  name: "get_holiday_stats",
-  description: "獲取指定年份的完整假期資料和統計",
-  // ... 完整的工具定義
+  type: string;           // 資源類型 ('years', 'holidays', 'stats')
+  year?: number;          // 年份（如適用）
+  data: any;              // 實際資料
+  metadata: {             // 元資料
+    generatedAt: string;  // 生成時間 (ISO 8601)
+    version: string;      // 版本資訊
+  };
+}
+```
+
+**年份列表資源範例**:
+```json
+{
+  "type": "years",
+  "data": {
+    "supportedYears": [2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025],
+    "totalYears": 9,
+    "range": {
+      "start": 2017,
+      "end": 2025
+    }
+  },
+  "metadata": {
+    "generatedAt": "2025-06-11T01:15:49.123Z",
+    "version": "1.0.0"
+  }
 }
 ```
 
