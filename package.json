@@ -21,7 +21,8 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "tsc && shx chmod +x dist/*.js",
+    "clean": "shx rm -rf dist",
+    "build": "npm run clean && tsc && shx chmod +x dist/*.js",
     "build:watch": "tsc --watch",
     "test": "jest",
     "test:watch": "jest --watch",
@@ -29,7 +30,9 @@
     "lint": "eslint src/**/*.ts",
     "lint:fix": "eslint src/**/*.ts --fix",
     "prepare": "npm run build",
-    "prepublishOnly": "npm run test && npm run build"
+    "prepublishOnly": "npm run test && npm run build",
+    "package:test": "npm pack --dry-run",
+    "package:local": "npm pack"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.1"
