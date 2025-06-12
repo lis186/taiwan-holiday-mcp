@@ -244,7 +244,7 @@ Taiwan Holiday MCP Server - 台灣假期 MCP 伺服器
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/justinlee/taiwan-holiday-mcp.git"
+    "url": "https://github.com/lis186/taiwan-holiday-mcp.git"
   }
 }
 ```
