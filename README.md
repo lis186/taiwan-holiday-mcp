@@ -1,8 +1,6 @@
 # Taiwan Holiday MCP Server
 
-[![Node.js Version](https://img.shields.io/node/v/taiwan-holiday-mcp.svg)](https://nodejs.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![npm version](https://badge.fury.io/js/taiwan-holiday-mcp.svg)](https://badge.fury.io/js/taiwan-holiday-mcp)
 
 一個基於 Model Context Protocol (MCP) 的台灣假期查詢伺服器，提供準確的台灣國定假日和補班日資訊。
 
@@ -345,7 +343,6 @@ npm run test:coverage
 
 - **GitHub Issues**: [回報問題](https://github.com/lis186/taiwan-holiday-mcp/issues)
 - **文件**: [完整文件](https://github.com/lis186/taiwan-holiday-mcp/docs)
-- **範例**: [使用範例](https://github.com/lis186/taiwan-holiday-mcp/examples)
 
 ---
 
