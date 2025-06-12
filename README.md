@@ -68,7 +68,7 @@ npm start
 - **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
 - **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
 
-### Cursor
+### Cursor 設定
 
 點擊以下按鈕直接安裝。
 
