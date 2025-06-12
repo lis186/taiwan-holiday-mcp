@@ -1,5 +1,7 @@
 # Taiwan Holiday MCP Server
 
+[![Node.js Version](https://img.shields.io/node/v/taiwan-holiday-mcp.svg)](https://nodejs.org/)
+[![npm version](https://badge.fury.io/js/taiwan-holiday-mcp.svg)](https://badge.fury.io/js/taiwan-holiday-mcp)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Install MCP Server](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/install-mcp?name=taiwan-holiday&config=eyJjb21tYW5kIjoibnB4IHRhaXdhbi1ob2xpZGF5LW1jcCJ9)
 
@@ -91,47 +93,58 @@ npm start
 
 ## 📖 使用範例
 
+安裝完成後，你可以直接在 Claude Desktop 中用自然語言與 AI 對話，詢問台灣假期相關問題：
+
 ### 基本查詢
 
-```typescript
-// 檢查單一日期
-await checkHoliday("2024-10-10");
-// 結果：{ "isHoliday": true, "name": "國慶日", "date": "2024-10-10" }
+**你可以這樣問：**
+> "2025年10月10日是假期嗎？"
+> 
+> "幫我查一下2025年1月有哪些假期"
+> 
+> "2025年總共有多少個假期？"
 
-// 查詢日期範圍
-await getHolidaysInRange("2024-01-01", "2024-01-31");
-// 結果：返回一月份的所有假期
+**Claude 會自動呼叫相應的工具並回答：**
+- ✅ 2025年10月10日是國慶日，是假期
+- 📅 2025年1月共有14個假期，包含春節連假
+- 📊 2025年總共有115個假期
 
-// 獲取統計資訊
-await getHolidayStats(2024);
-// 結果：2024年的假期統計
-```
+### 實用對話範例
 
-### 進階使用案例
+#### 🏖️ 假期規劃
 
-#### 1. 假期規劃助手
+**你：** "我想規劃2025年第一季的旅遊，幫我找出有哪些連假可以安排？"
 
-```typescript
-// 查詢連假資訊
-const holidays = await getHolidaysInRange("2024-02-08", "2024-02-14");
-console.log(`春節連假共 ${holidays.length} 天`);
-```
+**Claude：** 會自動查詢1-3月的假期，分析連續假期，並告訴你：
+- 春節連假：1月27日-31日（5天）
+- 228連假：2月28日-3月2日（3天）
+- 其他週末假期安排建議
 
-#### 2. 工作日計算
+#### 💼 工作安排
 
-```typescript
-// 檢查是否為工作日
-const result = await checkHoliday("2024-10-10");
-const isWorkday = !result.isHoliday;
-```
+**你：** "下週一（2025年10月6日）需要上班嗎？"
 
-#### 3. 月度假期統計
+**Claude：** 會檢查該日期並回答是否為工作日，如果是假期還會說明原因。
 
-```typescript
-// 獲取特定月份統計
-const stats = await getHolidayStats(2024, 10);
-console.log(`十月份共有 ${stats.totalHolidays} 個假期`);
-```
+#### 📈 假期統計
+
+**你：** "2025年10月份有幾個假期？有什麼重要節日嗎？"
+
+**Claude：** 會提供該月份的假期統計，包含國定假日和重要節慶資訊。
+
+### 進階應用
+
+#### 🎯 智慧假期分析
+
+**你：** "幫我分析2025年哪個月份最適合請假旅遊？"
+
+**Claude：** 會分析各月份的假期分布，考慮連假長度和頻率，給出最佳建議。
+
+#### 📅 年度假期規劃
+
+**你：** "我想看2025年所有的長假期，幫我整理一個清單"
+
+**Claude：** 會自動找出所有3天以上的連假，並按時間順序整理成清單。
 
 ## 🛠️ API 文件
 
@@ -149,10 +162,11 @@ console.log(`十月份共有 ${stats.totalHolidays} 個假期`);
 {
   "success": true,
   "data": {
-    "date": "2024-10-10",
+    "date": "2025-10-10",
     "isHoliday": true,
-    "name": "國慶日",
-    "description": "中華民國國慶日"
+    "description": "國慶日",
+    "week": "五",
+    "normalizedDate": "20251010"
   }
 }
 ```
@@ -170,11 +184,11 @@ console.log(`十月份共有 ${stats.totalHolidays} 個假期`);
 {
   "success": true,
   "data": {
+    "startDate": "2025-01-01",
+    "endDate": "2025-01-31",
     "holidays": [...],
-    "summary": {
-      "totalHolidays": 5,
-      "dateRange": "2024-01-01 to 2024-01-31"
-    }
+    "totalCount": 14,
+    "summary": "在 2025-01-01 到 2025-01-31 期間共有 14 個假期"
   }
 }
 ```
@@ -192,9 +206,15 @@ console.log(`十月份共有 ${stats.totalHolidays} 個假期`);
 {
   "success": true,
   "data": {
-    "year": 2024,
-    "totalHolidays": 115,
-    "monthlyBreakdown": {...}
+    "year": 2025,
+    "statistics": {
+      "year": 2025,
+      "totalHolidays": 115,
+      "nationalHolidays": 113,
+      "compensatoryDays": 2,
+      "holidayTypes": {...}
+    },
+    "summary": "2025 年共有 115 個假期"
   }
 }
 ```
@@ -234,7 +254,7 @@ taiwan-holiday-mcp --version
 
 **解決方案**：
 - 確保使用正確格式：`YYYY-MM-DD` 或 `YYYYMMDD`
-- 檢查日期是否有效（例如：2024-02-30 是無效日期）
+- 檢查日期是否有效（例如：2025-02-30 是無效日期）
 
 #### 3. 網路連接問題
 
@@ -243,7 +263,7 @@ taiwan-holiday-mcp --version
 **解決方案**：
 ```bash
 # 檢查網路連接
-curl -I https://cdn.jsdelivr.net/gh/ruyut/TaiwanCalendar/data/2024.json
+curl -I https://cdn.jsdelivr.net/gh/ruyut/TaiwanCalendar/data/2025.json
 
 # 清除快取（如果有問題）
 rm -rf ~/.taiwan-holiday-mcp-cache
