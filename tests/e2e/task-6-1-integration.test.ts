@@ -17,10 +17,7 @@ describe('Task 6.1: 完整整合測試與品質保證', () => {
   const distPath = join(projectRoot, 'dist');
   let child: ChildProcess | null = null;
 
-  beforeAll(async () => {
-    // 確保專案已建置
-    await runCommand('npm', ['run', 'build']);
-  });
+
 
   afterEach(() => {
     if (child) {
@@ -280,7 +277,7 @@ describe('Task 6.1: 完整整合測試與品質保證', () => {
       
       expect(result.exitCode).toBe(0);
       expect(endTime - startTime).toBeLessThan(5000); // 啟動時間 < 5 秒
-      expect(result.stdout).toContain('Taiwan Holiday MCP Server');
+      expect(result.stderr).toContain('Taiwan Holiday MCP Server');
     });
   });
 });

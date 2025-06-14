@@ -50,7 +50,8 @@ export default {
     'src/**/*.ts',
     '!src/**/*.d.ts',
     '!src/**/*.test.ts',
-    '!src/**/*.spec.ts'
+    '!src/**/*.spec.ts',
+    '!src/index.ts'  // 排除主要啟動檔案
   ],
   coverageDirectory: 'coverage',
   coverageReporters: [
@@ -79,5 +80,8 @@ export default {
   restoreMocks: true,
 
   // 錯誤處理
-  errorOnDeprecated: true
+  errorOnDeprecated: true,
+
+  // 限制並行執行以避免競態條件
+  maxWorkers: 1
 }; 

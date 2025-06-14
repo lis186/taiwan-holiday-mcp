@@ -24,10 +24,45 @@ global.fetch = jest.fn();
 // 設定時區為台北時間
 process.env.TZ = 'Asia/Taipei';
 
+// 全域建置狀態
+let buildCompleted = false;
+
+// 全域建置函數
+export async function ensureBuild(): Promise<void> {
+  if (buildCompleted) {
+    return;
+  }
+
+  const { spawn } = await import('child_process');
+  
+  return new Promise((resolve, reject) => {
+    const buildProcess = spawn('npm', ['run', 'build'], {
+      stdio: 'pipe',
+      cwd: process.cwd()
+    });
+
+    let stderr = '';
+
+    buildProcess.stderr?.on('data', (data) => {
+      stderr += data.toString();
+    });
+
+    buildProcess.on('close', (code) => {
+      if (code === 0) {
+        buildCompleted = true;
+        resolve();
+      } else {
+        reject(new Error(`Build failed with code ${code}: ${stderr}`));
+      }
+    });
+  });
+}
+
 // 測試前的全域設定
-beforeAll(() => {
-  // 可以在這裡設定全域的測試資料或模擬
-});
+beforeAll(async () => {
+  // 確保專案已建置
+  await ensureBuild();
+}, 30000); // 增加超時時間以允許建置完成
 
 // 每個測試前的清理
 beforeEach(() => {
@@ -89,9 +124,11 @@ expect.extend({
 });
 
 // 擴展 Jest 匹配器型別
-declare module '@jest/expect' {
-  interface Matchers<R> {
-    toBeValidDate(): R;
-    toBeValidHoliday(): R;
+declare global {
+  namespace jest {
+    interface Matchers<R> {
+      toBeValidDate(): R;
+      toBeValidHoliday(): R;
+    }
   }
 } 

@@ -6,11 +6,6 @@ describe('Task 5.2: 建置與打包完整測試', () => {
   const projectRoot = process.cwd();
   const distPath = join(projectRoot, 'dist');
 
-  beforeAll(async () => {
-    // 確保專案已建置
-    await runCommand('npm', ['run', 'build']);
-  });
-
   describe('T5.2.1: 建置腳本測試', () => {
     test('應該生成所有必要的檔案', async () => {
       const requiredFiles = [
@@ -57,18 +52,18 @@ describe('Task 5.2: 建置與打包完整測試', () => {
       const result = await runCommand('node', [join(distPath, 'index.js'), '--version']);
       
       expect(result.exitCode).toBe(0);
-      expect(result.stdout).toContain('Taiwan Holiday MCP Server v1.0.0');
-      expect(result.stdout).toContain('Node.js');
-      expect(result.stdout).toContain('Platform:');
+      expect(result.stderr).toContain('Taiwan Holiday MCP Server v1.0.1');
+      expect(result.stderr).toContain('Node.js');
+      expect(result.stderr).toContain('Platform:');
     });
 
     test('應該正確處理 --help 參數', async () => {
       const result = await runCommand('node', [join(distPath, 'index.js'), '--help']);
       
       expect(result.exitCode).toBe(0);
-      expect(result.stdout).toContain('Taiwan Holiday MCP Server');
-      expect(result.stdout).toContain('用法:');
-      expect(result.stdout).toContain('選項:');
+      expect(result.stderr).toContain('Taiwan Holiday MCP Server');
+      expect(result.stderr).toContain('用法:');
+      expect(result.stderr).toContain('選項:');
     });
 
     test('效能測試：啟動時間應該合理', async () => {
@@ -86,7 +81,7 @@ describe('Task 5.2: 建置與打包完整測試', () => {
 
   describe('T5.2.3: 基本 MCP 功能測試', () => {
     test('應該能夠啟動 MCP 伺服器', async () => {
-      const result = await runCommandWithTimeout('node', [join(distPath, 'index.js')], 1000);
+      const result = await runCommandWithTimeoutAndEnv('node', [join(distPath, 'index.js')], 1000, { DEBUG: 'true' });
       
       // MCP 伺服器的啟動訊息會輸出到 stderr，避免干擾 JSON-RPC 通訊
       expect(result.stderr).toContain('Taiwan Holiday MCP 伺服器已啟動');
@@ -99,7 +94,7 @@ describe('Task 5.2: 建置與打包完整測試', () => {
       
       expect(result.exitCode).toBe(0);
       // npm pack 的輸出會包含套件檔名
-      expect(result.stdout).toContain('taiwan-holiday-mcp-1.0.0.tgz');
+      expect(result.stdout).toContain('taiwan-holiday-mcp-1.0.1.tgz');
       // 檢查建置過程是否成功
       expect(result.stdout).toContain('prepare');
       expect(result.stdout).toContain('build');
@@ -147,6 +142,40 @@ function runCommandWithTimeout(command: string, args: string[], timeout: number)
     const child = spawn(command, args, {
       stdio: 'pipe',
       cwd: process.cwd()
+    });
+
+    let stdout = '';
+    let stderr = '';
+
+    child.stdout?.on('data', (data) => {
+      stdout += data.toString();
+    });
+
+    child.stderr?.on('data', (data) => {
+      stderr += data.toString();
+    });
+
+    const timer = setTimeout(() => {
+      child.kill('SIGTERM');
+    }, timeout);
+
+    child.on('close', (code) => {
+      clearTimeout(timer);
+      resolve({
+        exitCode: code || 0,
+        stdout,
+        stderr
+      });
+    });
+  });
+}
+
+function runCommandWithTimeoutAndEnv(command: string, args: string[], timeout: number, env: Record<string, string>): Promise<CommandResult> {
+  return new Promise((resolve) => {
+    const child = spawn(command, args, {
+      stdio: 'pipe',
+      cwd: process.cwd(),
+      env: { ...process.env, ...env }
     });
 
     let stdout = '';

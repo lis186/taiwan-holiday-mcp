@@ -122,6 +122,8 @@ export enum ErrorType {
   INVALID_MONTH = 'INVALID_MONTH',
   /** 無效的日期 */
   INVALID_DATE = 'INVALID_DATE',
+  /** 無效的日期格式 */
+  INVALID_DATE_FORMAT = 'INVALID_DATE_FORMAT',
   /** 資料不存在 */
   DATA_NOT_FOUND = 'DATA_NOT_FOUND',
   /** 網路錯誤 */

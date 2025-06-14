@@ -28,7 +28,7 @@ export class TaiwanHolidayMcpServer {
     this.server = new Server(
       {
         name: 'taiwan-holiday-mcp',
-        version: '1.0.0',
+        version: '1.0.1',
       },
       {
         capabilities: {
@@ -137,9 +137,13 @@ export class TaiwanHolidayMcpServer {
             throw new Error(`未知的工具: ${name}`);
         }
       } catch (error) {
-        console.error(`工具執行錯誤 [${name}]:`, error);
+        // 在除錯模式下輸出錯誤訊息到 stderr
+        if (process.env.DEBUG === 'true') {
+          console.error(`工具執行錯誤 [${name}]:`, error);
+        }
         
-        const errorMessage = error instanceof Error ? error.message : '未知錯誤';
+        const errorMessage = error instanceof HolidayServiceError ? error.message : 
+                          error instanceof Error ? error.message : '未知錯誤';
         const errorType = error instanceof HolidayServiceError ? error.type : ErrorType.UNKNOWN_ERROR;
         
         return {
@@ -210,7 +214,10 @@ export class TaiwanHolidayMcpServer {
       try {
         return await this.handleReadResource(uri);
       } catch (error) {
-        console.error(`資源讀取錯誤 [${uri}]:`, error);
+        // 在除錯模式下輸出錯誤訊息到 stderr
+        if (process.env.DEBUG === 'true') {
+          console.error(`資源讀取錯誤 [${uri}]:`, error);
+        }
         
         const errorMessage = error instanceof Error ? error.message : '未知錯誤';
         
@@ -476,33 +483,54 @@ export class TaiwanHolidayMcpServer {
    * 設定錯誤處理
    */
   private setupErrorHandling(): void {
-    // 處理未捕獲的錯誤
-    process.on('uncaughtException', (error) => {
-      console.error('未捕獲的例外:', error);
-      // 清理資源
-      this.holidayService.clearCache();
-      process.exit(1);
-    });
+    // 在測試環境中跳過全域事件監聽器設定
+    if (process.env.NODE_ENV === 'test' || process.env.JEST_WORKER_ID !== undefined) {
+      return;
+    }
 
-    process.on('unhandledRejection', (reason, promise) => {
-      console.error('未處理的 Promise 拒絕:', reason);
-      // 清理資源
-      this.holidayService.clearCache();
-      process.exit(1);
-    });
+    // 檢查是否已經設定過監聽器，避免重複註冊
+    const existingListeners = {
+      uncaughtException: process.listenerCount('uncaughtException'),
+      unhandledRejection: process.listenerCount('unhandledRejection'),
+      SIGINT: process.listenerCount('SIGINT'),
+      SIGTERM: process.listenerCount('SIGTERM'),
+    };
+
+    // 處理未捕獲的錯誤
+    if (existingListeners.uncaughtException === 0) {
+      process.on('uncaughtException', (error) => {
+        console.error('未捕獲的例外:', error);
+        // 清理資源
+        this.holidayService.clearCache();
+        process.exit(1);
+      });
+    }
+
+    if (existingListeners.unhandledRejection === 0) {
+      process.on('unhandledRejection', (reason, promise) => {
+        console.error('未處理的 Promise 拒絕:', reason);
+        // 清理資源
+        this.holidayService.clearCache();
+        process.exit(1);
+      });
+    }
 
     // 優雅關閉
-    process.on('SIGINT', () => {
-      console.log('\n正在關閉 Taiwan Holiday MCP 伺服器...');
-      this.holidayService.clearCache();
-      process.exit(0);
-    });
+    if (existingListeners.SIGINT === 0) {
+      process.on('SIGINT', () => {
+        console.error('\n正在關閉 Taiwan Holiday MCP 伺服器...');
+        this.holidayService.clearCache();
+        process.exit(0);
+      });
+    }
 
-    process.on('SIGTERM', () => {
-      console.log('\n正在關閉 Taiwan Holiday MCP 伺服器...');
-      this.holidayService.clearCache();
-      process.exit(0);
-    });
+    if (existingListeners.SIGTERM === 0) {
+      process.on('SIGTERM', () => {
+        console.error('\n正在關閉 Taiwan Holiday MCP 伺服器...');
+        this.holidayService.clearCache();
+        process.exit(0);
+      });
+    }
   }
 
   /**
@@ -511,7 +539,9 @@ export class TaiwanHolidayMcpServer {
   async run(): Promise<void> {
     const transport = new StdioServerTransport();
     await this.server.connect(transport);
-    console.error('Taiwan Holiday MCP 伺服器已啟動 - 完整功能版本'); // 使用 stderr 避免干擾 JSON-RPC
+    if (process.env.DEBUG === 'true') {
+      console.error('Taiwan Holiday MCP 伺服器已啟動 - 完整功能版本'); // 使用 stderr 避免干擾 JSON-RPC
+    }
   }
 }
 

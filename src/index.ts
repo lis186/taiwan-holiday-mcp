@@ -21,11 +21,11 @@ const packageJsonPath = join(__dirname, '..', 'package.json');
 function showVersion(): void {
   try {
     const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8'));
-    console.log(`Taiwan Holiday MCP Server v${packageJson.version}`);
-    console.log(`Node.js ${process.version}`);
-    console.log(`Platform: ${process.platform} ${process.arch}`);
+    console.error(`Taiwan Holiday MCP Server v${packageJson.version}`);
+    console.error(`Node.js ${process.version}`);
+    console.error(`Platform: ${process.platform} ${process.arch}`);
   } catch (error) {
-    console.log('Taiwan Holiday MCP Server (版本資訊不可用)');
+    console.error('Taiwan Holiday MCP Server (版本資訊不可用)');
   }
 }
 
@@ -33,7 +33,7 @@ function showVersion(): void {
  * 顯示幫助資訊
  */
 function showHelp(): void {
-  console.log(`
+  console.error(`
 Taiwan Holiday MCP Server - 台灣假期 MCP 伺服器
 
 用法:
@@ -155,6 +155,7 @@ async function main(): Promise<void> {
 
     // 除錯資訊
     if (process.env.DEBUG === 'true') {
+      console.error('Taiwan Holiday MCP 伺服器已啟動');
       console.error('除錯模式已啟用');
       console.error(`Node.js 版本: ${process.version}`);
       console.error(`平台: ${process.platform} ${process.arch}`);

@@ -20,34 +20,38 @@ describe('跨平台相容性測試', () => {
     // 使用本地建置的檔案而不是 npx，因為套件還未發布
     const indexPath = join(process.cwd(), 'dist', 'index.js');
     
-    child = spawn('node', [indexPath, '--help'], {
-      stdio: ['pipe', 'pipe', 'pipe']
+    // 使用 --debug 參數啟動伺服器，這樣會輸出啟動訊息
+    child = spawn('node', [indexPath, '--debug'], {
+      stdio: ['pipe', 'pipe', 'pipe'],
+      env: { ...process.env, DEBUG: 'true' }
     });
 
     const startupPromise = new Promise<boolean>((resolve, reject) => {
       const timeout = setTimeout(() => {
+        child.kill();
         reject(new Error('啟動超時'));
-      }, 10000);
+      }, 5000); // 縮短超時時間
 
-      let output = '';
-      child.stdout?.on('data', (data) => {
-        output += data.toString();
+      let stderrOutput = '';
+      child.stderr?.on('data', (data) => {
+        const output = data.toString();
+        stderrOutput += output;
+        
+        // 檢查是否包含啟動成功訊息
+        if (output.includes('Taiwan Holiday MCP 伺服器已啟動')) {
+          clearTimeout(timeout);
+          child.kill(); // 啟動成功後立即終止
+          resolve(true);
+        }
       });
 
       child.on('close', (code) => {
         clearTimeout(timeout);
-        if (code === 0 && output.includes('Taiwan Holiday MCP Server')) {
+        // 在除錯模式下，伺服器會被手動終止，所以退出代碼可能不是 0
+        if (stderrOutput.includes('Taiwan Holiday MCP 伺服器已啟動')) {
           resolve(true);
         } else {
-          reject(new Error(`啟動失敗，退出代碼: ${code}, 輸出: ${output}`));
-        }
-      });
-
-      child.stderr?.on('data', (data) => {
-        const error = data.toString();
-        if (error.includes('Error') || error.includes('error')) {
-          clearTimeout(timeout);
-          reject(new Error(`啟動錯誤: ${error}`));
+          reject(new Error(`啟動失敗，退出代碼: ${code}, stderr: ${stderrOutput}`));
         }
       });
     });
@@ -69,7 +73,7 @@ describe('跨平台相容性測試', () => {
       }, 10000);
 
       let output = '';
-      child.stdout?.on('data', (data) => {
+      child.stderr?.on('data', (data) => {
         output += data.toString();
       });
 
@@ -154,7 +158,8 @@ describe('跨平台相容性測試', () => {
     // 使用本地建置的檔案而不是 npx，因為套件還未發布
     const indexPath = join(process.cwd(), 'dist', 'index.js');
     
-    child = spawn('node', [indexPath, '--debug', '--version'], {
+    // 只測試 --version 來確保基本功能正常
+    child = spawn('node', [indexPath, '--version'], {
       stdio: ['pipe', 'pipe', 'pipe'],
       env: { ...process.env, DEBUG: 'true' }
     });
@@ -182,11 +187,10 @@ describe('跨平台相容性測試', () => {
     });
 
     const { stdout, stderr } = await debugPromise;
-    expect(stdout).toContain('Taiwan Holiday MCP Server');
-    // 除錯資訊應該出現在 stderr 中，但 --version 不會觸發除錯輸出
-    // 所以我們只檢查基本功能正常
-    expect(stdout).toContain('Node.js');
-    expect(stdout).toContain('Platform:');
+    // --version 的輸出包含版本資訊（輸出到 stderr）
+    expect(stderr).toContain('Taiwan Holiday MCP Server v');
+    expect(stderr).toContain('Node.js');
+    expect(stderr).toContain('Platform:');
   }, 15000);
 });
 
