@@ -31,9 +31,7 @@ describe('MCP 協議測試', () => {
       expect(typeof server.run).toBe('function');
     });
 
-    it.skip('錯誤處理器在測試環境中跳過', () => {
-      // 在測試環境中，錯誤處理器不會被設定以避免記憶體洩漏
-    });
+
   });
 
   describe('MCP 工具功能測試', () => {

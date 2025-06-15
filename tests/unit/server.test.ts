@@ -553,10 +553,7 @@ describe('TaiwanHolidayMcpServer', () => {
       if (originalJest) process.env.JEST_WORKER_ID = originalJest;
     });
 
-    test.skip('事件處理器測試在測試環境中跳過', () => {
-      // 這些測試在測試環境中不會執行，因為事件監聽器在測試環境中不會被設定
-      // 以避免記憶體洩漏和測試干擾
-    });
+
   });
 
   describe('伺服器啟動', () => {
