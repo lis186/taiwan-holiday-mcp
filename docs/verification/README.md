@@ -12,6 +12,7 @@
 | [stage-4-verification.md](./stage-4-verification.md) | 階段 4 | MCP 協議整合 + 最終 Cursor 驗證 | 協議整合、資源實作、NPX 驗證 |
 | [stage-5-verification.md](./stage-5-verification.md) | 階段 5 | NPX 套件設定 | 跨平台測試、套件配置 |
 | [stage-6-verification.md](./stage-6-verification.md) | 階段 6 | 整合測試與文件 | 品質保證、文件完善 |
+| [stage-7-verification.md](./stage-7-verification.md) | 階段 7 | 專案堅實化改善 | 基礎穩固、架構強化、品質保證、開發體驗 |
 
 ## 驗證標準編號系統
 
