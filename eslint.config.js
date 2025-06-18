@@ -12,6 +12,16 @@ export default [
         ecmaVersion: 2022,
         sourceType: 'module',
         project: './tsconfig.json'
+      },
+      globals: {
+        process: 'readonly',
+        console: 'readonly',
+        setTimeout: 'readonly',
+        clearTimeout: 'readonly',
+        setInterval: 'readonly',
+        clearInterval: 'readonly',
+        fetch: 'readonly',
+        NodeJS: 'readonly'
       }
     },
     plugins: {

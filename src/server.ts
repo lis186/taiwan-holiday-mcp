@@ -13,6 +13,8 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import { HolidayService, HolidayServiceError } from './holiday-service.js';
 import { ErrorType } from './types.js';
+import { HealthMonitor, DefaultHealthChecks, HealthStatus } from './utils/health-monitor.js';
+import { GracefulShutdown, DefaultShutdownHandlers } from './utils/graceful-shutdown.js';
 
 /**
  * Taiwan Holiday MCP Server
@@ -23,6 +25,8 @@ import { ErrorType } from './types.js';
 export class TaiwanHolidayMcpServer {
   private server: Server;
   private holidayService: HolidayService;
+  private healthMonitor: HealthMonitor;
+  private gracefulShutdown?: GracefulShutdown;
 
   constructor() {
     this.server = new Server(
@@ -40,6 +44,20 @@ export class TaiwanHolidayMcpServer {
 
     // 初始化假期服務
     this.holidayService = new HolidayService();
+
+    // 初始化健康監控
+    this.healthMonitor = new HealthMonitor('1.0.1');
+    this.setupHealthChecks();
+
+    // 初始化優雅關機（測試環境中跳過）
+    if (process.env.NODE_ENV !== 'test' && process.env.JEST_WORKER_ID === undefined) {
+      this.gracefulShutdown = new GracefulShutdown({
+        timeout: 10000, // 10 秒超時
+        logger: (message) => console.log(message),
+        delay: 1000, // 1 秒延遲
+      });
+      this.setupShutdownHandlers();
+    }
 
     this.setupToolHandlers();
     this.setupResourceHandlers();
@@ -203,6 +221,18 @@ export class TaiwanHolidayMcpServer {
             description: '2025年台灣假期統計資訊',
             mimeType: 'application/json',
           } as Resource,
+          {
+            uri: 'taiwan-holidays://health',
+            name: '系統健康狀態',
+            description: '即時系統健康狀態和診斷資訊',
+            mimeType: 'application/json',
+          } as Resource,
+          {
+            uri: 'taiwan-holidays://health/quick',
+            name: '快速健康檢查',
+            description: '快速系統健康狀態檢查',
+            mimeType: 'application/json',
+          } as Resource,
         ],
       };
     });
@@ -260,6 +290,12 @@ export class TaiwanHolidayMcpServer {
           throw new Error('缺少年份參數');
         }
         return this.getStatsResource(parsedUri.year);
+      
+      case 'health':
+        return this.getHealthResource();
+      
+      case 'health/quick':
+        return this.getQuickHealthResource();
       
       default:
         throw new Error(`不支援的資源類型: ${uri}`);
@@ -373,6 +409,84 @@ export class TaiwanHolidayMcpServer {
   }
 
   /**
+   * 獲取健康狀態資源
+   */
+  private async getHealthResource() {
+    try {
+      const healthData = await this.healthMonitor.performHealthCheck();
+      
+      return {
+        contents: [
+          {
+            uri: 'taiwan-holidays://health',
+            mimeType: 'application/json',
+            text: JSON.stringify({
+              success: true,
+              data: healthData,
+              description: '系統健康狀態詳細報告',
+              timestamp: new Date().toISOString(),
+            }, null, 2),
+          } as TextResourceContents,
+        ],
+      };
+    } catch (error) {
+      return {
+        contents: [
+          {
+            uri: 'taiwan-holidays://health',
+            mimeType: 'application/json',
+            text: JSON.stringify({
+              success: false,
+              error: '健康檢查失敗',
+              details: error instanceof Error ? error.message : String(error),
+              timestamp: new Date().toISOString(),
+            }, null, 2),
+          } as TextResourceContents,
+        ],
+      };
+    }
+  }
+
+  /**
+   * 獲取快速健康狀態資源
+   */
+  private getQuickHealthResource() {
+    try {
+      const quickStatus = this.healthMonitor.getQuickStatus();
+      
+      return {
+        contents: [
+          {
+            uri: 'taiwan-holidays://health/quick',
+            mimeType: 'application/json',
+            text: JSON.stringify({
+              success: true,
+              data: quickStatus,
+              description: '快速健康狀態檢查',
+              timestamp: new Date().toISOString(),
+            }, null, 2),
+          } as TextResourceContents,
+        ],
+      };
+    } catch (error) {
+      return {
+        contents: [
+          {
+            uri: 'taiwan-holidays://health/quick',
+            mimeType: 'application/json',
+            text: JSON.stringify({
+              success: false,
+              error: '快速健康檢查失敗',
+              details: error instanceof Error ? error.message : String(error),
+              timestamp: new Date().toISOString(),
+            }, null, 2),
+          } as TextResourceContents,
+        ],
+      };
+    }
+  }
+
+  /**
    * 處理檢查假期工具
    */
   private async handleCheckHoliday(args: any) {
@@ -480,6 +594,97 @@ export class TaiwanHolidayMcpServer {
   }
 
   /**
+   * 設定健康檢查
+   */
+  private setupHealthChecks(): void {
+    // 基本存活檢查
+    this.healthMonitor.registerCheck('aliveness', DefaultHealthChecks.aliveness());
+
+    // 記憶體使用檢查
+    this.healthMonitor.registerCheck('memory', DefaultHealthChecks.memoryUsage(85));
+
+    // 外部 API 檢查
+    this.healthMonitor.registerCheck(
+      'taiwan-calendar-api',
+      DefaultHealthChecks.externalApi('https://cdn.jsdelivr.net/gh/ruyut/TaiwanCalendar/data/2024.json', 5000)
+    );
+
+    // 服務狀態檢查
+    this.healthMonitor.registerCheck('holiday-service', async () => {
+      try {
+        const circuitBreakerStats = this.holidayService.getCircuitBreakerStats();
+        const cacheStats = this.holidayService.getCacheStats();
+        const throttlerStats = this.holidayService.getThrottlerStats();
+
+        let status = HealthStatus.HEALTHY;
+        
+        // 檢查 Circuit Breaker 狀態
+        if (circuitBreakerStats.state === 'OPEN') {
+          status = HealthStatus.DEGRADED;
+        }
+
+        // 檢查快取命中率
+        if (cacheStats.hitRate < 50 && cacheStats.totalRequests > 10) {
+          status = HealthStatus.DEGRADED;
+        }
+
+        // 檢查請求佇列
+        if (throttlerStats.droppedRequests > throttlerStats.totalRequests * 0.1) {
+          status = HealthStatus.DEGRADED;
+        }
+
+        return {
+          name: 'holiday-service',
+          status,
+          responseTime: 0,
+          details: {
+            circuitBreaker: circuitBreakerStats,
+            cache: cacheStats,
+            throttler: throttlerStats,
+          },
+          timestamp: Date.now(),
+        };
+      } catch (error) {
+        return {
+          name: 'holiday-service',
+          status: HealthStatus.UNHEALTHY,
+          responseTime: 0,
+          error: error instanceof Error ? error.message : String(error),
+          timestamp: Date.now(),
+        };
+      }
+    });
+  }
+
+  /**
+   * 設定關機處理器
+   */
+  private setupShutdownHandlers(): void {
+    if (!this.gracefulShutdown) {
+      return;
+    }
+    // 清理快取
+    this.gracefulShutdown.registerHandler(async () => {
+      this.holidayService.clearCache();
+    });
+
+    // 清理過期快取
+    this.gracefulShutdown.registerHandler(async () => {
+      this.holidayService.clearExpiredCache();
+    });
+
+    // 銷毀服務
+    this.gracefulShutdown.registerHandler(async () => {
+      this.holidayService.destroy();
+    });
+
+    // 清理健康監控
+    this.gracefulShutdown.registerHandler(async () => {
+      this.healthMonitor.clearResults();
+    });
+  }
+
+  /**
    * 設定錯誤處理
    */
   private setupErrorHandling(): void {
@@ -496,41 +701,8 @@ export class TaiwanHolidayMcpServer {
       SIGTERM: process.listenerCount('SIGTERM'),
     };
 
-    // 處理未捕獲的錯誤
-    if (existingListeners.uncaughtException === 0) {
-      process.on('uncaughtException', (error) => {
-        console.error('未捕獲的例外:', error);
-        // 清理資源
-        this.holidayService.clearCache();
-        process.exit(1);
-      });
-    }
-
-    if (existingListeners.unhandledRejection === 0) {
-      process.on('unhandledRejection', (reason, promise) => {
-        console.error('未處理的 Promise 拒絕:', reason);
-        // 清理資源
-        this.holidayService.clearCache();
-        process.exit(1);
-      });
-    }
-
-    // 優雅關閉
-    if (existingListeners.SIGINT === 0) {
-      process.on('SIGINT', () => {
-        console.error('\n正在關閉 Taiwan Holiday MCP 伺服器...');
-        this.holidayService.clearCache();
-        process.exit(0);
-      });
-    }
-
-    if (existingListeners.SIGTERM === 0) {
-      process.on('SIGTERM', () => {
-        console.error('\n正在關閉 Taiwan Holiday MCP 伺服器...');
-        this.holidayService.clearCache();
-        process.exit(0);
-      });
-    }
+    // 注意：錯誤處理已由 GracefulShutdown 類別統一管理
+    // 這裡只保留 MCP 特定的錯誤處理邏輯
   }
 
   /**

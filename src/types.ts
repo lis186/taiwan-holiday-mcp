@@ -130,6 +130,14 @@ export enum ErrorType {
   NETWORK_ERROR = 'NETWORK_ERROR',
   /** 解析錯誤 */
   PARSE_ERROR = 'PARSE_ERROR',
+  /** API 錯誤 */
+  API_ERROR = 'API_ERROR',
+  /** 超時錯誤 */
+  TIMEOUT_ERROR = 'TIMEOUT_ERROR',
+  /** 驗證錯誤 */
+  VALIDATION_ERROR = 'VALIDATION_ERROR',
+  /** 系統錯誤 */
+  SYSTEM_ERROR = 'SYSTEM_ERROR',
   /** 未知錯誤 */
   UNKNOWN_ERROR = 'UNKNOWN_ERROR'
 }

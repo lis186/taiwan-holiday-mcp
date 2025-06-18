@@ -399,9 +399,11 @@ describe('TaiwanHolidayMcpServer', () => {
       
       const result = await resourcesHandler({} as any);
       
-      expect(result.resources).toHaveLength(5);
+      expect(result.resources).toHaveLength(7); // Updated for health resources
       expect(result.resources.map((r: any) => r.uri)).toContain('taiwan-holidays://years');
       expect(result.resources.map((r: any) => r.uri)).toContain('taiwan-holidays://holidays/2024');
+      expect(result.resources.map((r: any) => r.uri)).toContain('taiwan-holidays://health');
+      expect(result.resources.map((r: any) => r.uri)).toContain('taiwan-holidays://health/quick');
     });
   });
 

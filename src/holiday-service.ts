@@ -6,6 +6,10 @@
 
 import { Holiday, HolidayStats, ErrorType, SUPPORTED_YEAR_RANGE, HOLIDAY_TYPES } from './types.js';
 import { parseDate, ParsedDate, DateParseError } from './utils/date-parser.js';
+import { CircuitBreaker, CircuitBreakerOptions, CircuitBreakerError } from './utils/circuit-breaker.js';
+import { ErrorClassifier, ErrorCategory } from './utils/error-classifier.js';
+import { RequestThrottler, ThrottleOptions } from './utils/request-throttler.js';
+import { SmartCache, SmartCacheOptions } from './utils/smart-cache.js';
 
 /**
  * 快取項目介面
@@ -52,8 +56,14 @@ export class HolidayService {
   /** CDN 基礎 URL */
   private readonly baseUrl = 'https://cdn.jsdelivr.net/gh/ruyut/TaiwanCalendar/data';
   
-  /** 記憶體快取 */
-  private readonly cache = new Map<string, CacheItem<Holiday[]>>();
+  /** 智慧快取系統 */
+  private readonly smartCache: SmartCache<Holiday[]>;
+  
+  /** Circuit Breaker */
+  private readonly circuitBreaker: CircuitBreaker;
+  
+  /** Request Throttler */
+  private readonly requestThrottler: RequestThrottler;
   
   /** 預設請求選項 */
   private readonly defaultOptions: RequestOptions = {
@@ -73,6 +83,37 @@ export class HolidayService {
     private readonly cacheTtl: number = 60 * 60 * 1000 // 1 小時
   ) {
     this.options = { ...this.defaultOptions, ...options };
+    
+    // 初始化智慧快取
+    const cacheOptions: SmartCacheOptions = {
+      maxSize: 100,              // 最大 100 個快取項目
+      defaultTtl: cacheTtl,      // 使用傳入的 TTL
+      statsWindow: 300000,       // 5 分鐘統計視窗
+      autoCleanup: true,         // 啟用自動清理
+      cleanupInterval: 600000,   // 10 分鐘清理一次
+    };
+    this.smartCache = new SmartCache<Holiday[]>(cacheOptions);
+    
+    // 初始化 Circuit Breaker
+    const circuitBreakerOptions: CircuitBreakerOptions = {
+      failureThreshold: 5,      // 5 次失敗後開啟
+      recoveryTimeout: 30000,   // 30 秒後嘗試恢復
+      monitoringPeriod: 60000,  // 監控 60 秒
+      isExpectedError: (error) => {
+        const classification = ErrorClassifier.classify(error);
+        return classification.category === ErrorCategory.EXPECTED;
+      }
+    };
+    this.circuitBreaker = new CircuitBreaker(circuitBreakerOptions);
+    
+    // 初始化 Request Throttler
+    const throttleOptions: ThrottleOptions = {
+      maxRequestsPerSecond: 10,  // 每秒最多 10 個請求
+      maxQueueSize: 50,          // 最大佇列 50 個請求
+      requestTimeout: 30000,     // 請求超時 30 秒
+      enableBackpressure: true   // 啟用背壓處理
+    };
+    this.requestThrottler = new RequestThrottler(throttleOptions);
   }
 
   /**
@@ -89,31 +130,50 @@ export class HolidayService {
 
     const cacheKey = `holidays_${year}`;
     
-    // 檢查快取
-    const cached = this.getFromCache(cacheKey);
+    // 檢查智慧快取
+    const cached = this.smartCache.get(cacheKey);
     if (cached) {
       return cached;
     }
 
     try {
-      // 從 CDN 獲取資料
-      const holidays = await this.fetchHolidaysFromCdn(year);
+      // 使用 Circuit Breaker 和 Throttler 保護的請求
+      const holidays = await this.circuitBreaker.execute(async () => {
+        return await this.requestThrottler.throttle(async () => {
+          return await this.fetchHolidaysFromCdn(year);
+        });
+      });
       
       // 驗證資料格式
       this.validateHolidayData(holidays);
       
-      // 存入快取
-      this.setCache(cacheKey, holidays);
+      // 存入智慧快取
+      this.smartCache.set(cacheKey, holidays);
       
       return holidays;
     } catch (error) {
+      // 使用錯誤分類器進行分類處理
+      const classification = ErrorClassifier.classify(error instanceof Error ? error : new Error(String(error)));
+      
       if (error instanceof HolidayServiceError) {
         throw error;
       }
       
+      if (error instanceof CircuitBreakerError) {
+        throw new HolidayServiceError(
+          `服務暫時不可用 (Circuit Breaker 開啟): ${error.message}`,
+          ErrorType.API_ERROR,
+          error
+        );
+      }
+      
+      // 根據分類決定錯誤類型
+      const errorType = classification.type;
+      const errorMessage = `獲取 ${year} 年假期資料失敗: ${error instanceof Error ? error.message : String(error)}`;
+      
       throw new HolidayServiceError(
-        `獲取 ${year} 年假期資料失敗: ${error instanceof Error ? error.message : String(error)}`,
-        ErrorType.NETWORK_ERROR,
+        errorMessage,
+        errorType,
         error instanceof Error ? error : undefined
       );
     }
@@ -219,20 +279,9 @@ export class HolidayService {
    * 清除快取
    */
   clearCache(): void {
-    this.cache.clear();
+    this.smartCache.clear();
   }
 
-  /**
-   * 清除過期的快取項目
-   */
-  clearExpiredCache(): void {
-    const now = Date.now();
-    for (const [key, item] of this.cache.entries()) {
-      if (now - item.timestamp > item.ttl) {
-        this.cache.delete(key);
-      }
-    }
-  }
 
   /**
    * 從 CDN 獲取假期資料
@@ -241,6 +290,7 @@ export class HolidayService {
     const url = `${this.baseUrl}/${year}.json`;
     
     let lastError: Error | undefined;
+    let currentDelay = this.options.retryDelay!;
     
     for (let attempt = 0; attempt <= this.options.retries!; attempt++) {
       try {
@@ -260,9 +310,25 @@ export class HolidayService {
       } catch (error) {
         lastError = error instanceof Error ? error : new Error(String(error));
         
-        // 如果不是最後一次嘗試，等待後重試
+        // 使用錯誤分類器決定是否應該重試
+        const classification = ErrorClassifier.classify(lastError);
+        
+        if (!classification.retryStrategy.shouldRetry) {
+          throw new HolidayServiceError(
+            `請求失敗，錯誤不可重試: ${lastError.message}`,
+            classification.type,
+            lastError
+          );
+        }
+        
+        // 如果不是最後一次嘗試，使用指數退避等待後重試
         if (attempt < this.options.retries!) {
-          await this.delay(this.options.retryDelay!);
+          const retryDelay = Math.min(
+            currentDelay * Math.pow(classification.retryStrategy.backoffMultiplier, attempt),
+            classification.retryStrategy.maxDelay
+          );
+          await this.delay(retryDelay);
+          currentDelay = retryDelay;
         }
       }
     }
@@ -434,33 +500,47 @@ export class HolidayService {
     };
   }
 
+
   /**
-   * 從快取獲取資料
+   * 獲取 Circuit Breaker 統計資訊
    */
-  private getFromCache(key: string): Holiday[] | null {
-    const item = this.cache.get(key);
-    
-    if (!item) {
-      return null;
-    }
-    
-    // 檢查是否過期
-    if (Date.now() - item.timestamp > item.ttl) {
-      this.cache.delete(key);
-      return null;
-    }
-    
-    return item.data;
+  getCircuitBreakerStats() {
+    return this.circuitBreaker.getStats();
   }
 
   /**
-   * 設定快取
+   * 獲取 Request Throttler 統計資訊
    */
-  private setCache(key: string, data: Holiday[]): void {
-    this.cache.set(key, {
-      data,
-      timestamp: Date.now(),
-      ttl: this.cacheTtl
-    });
+  getThrottlerStats() {
+    return this.requestThrottler.getStats();
+  }
+
+  /**
+   * 獲取智慧快取統計資訊
+   */
+  getCacheStats() {
+    return this.smartCache.getStats();
+  }
+
+  /**
+   * 清理過期快取
+   */
+  clearExpiredCache(): number {
+    return this.smartCache.cleanup();
+  }
+
+  /**
+   * 手動重置 Circuit Breaker
+   */
+  resetCircuitBreaker(): void {
+    this.circuitBreaker.forceReset();
+  }
+
+  /**
+   * 銷毀服務並清理資源
+   */
+  destroy(): void {
+    this.smartCache.destroy();
+    this.requestThrottler.stop();
   }
 } 

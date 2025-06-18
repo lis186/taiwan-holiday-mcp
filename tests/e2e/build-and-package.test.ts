@@ -238,7 +238,7 @@ describe('建置與打包完整測試', () => {
 
       const input = requests.join('\n');
       const result = await runCommandWithInput('node', [join(distPath, 'index.js')], input, {
-        timeout: 10000
+        timeout: 15000
       });
 
       expect(result.exitCode).toBe(0);
@@ -257,7 +257,7 @@ describe('建置與打包完整測試', () => {
         expect(response.id).toBeLessThanOrEqual(10);
         expect(response.result).toBeDefined();
       });
-    });
+    }, 20000);
   });
 
   describe('套件打包測試', () => {
