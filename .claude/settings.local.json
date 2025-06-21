@@ -8,7 +8,11 @@
       "Bash(timeout 30s npm test:*)",
       "Bash(rm:*)",
       "Bash(grep:*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(npm install)",
+      "Bash(ls:*)",
+      "Bash(node:*)",
+      "mcp__ide__getDiagnostics"
     ],
     "deny": []
   }

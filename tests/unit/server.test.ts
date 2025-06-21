@@ -28,10 +28,14 @@ describe('TaiwanHolidayMcpServer', () => {
   let server: TaiwanHolidayMcpServer;
   let mockServer: jest.Mocked<Server>;
   let mockHolidayService: jest.Mocked<HolidayService>;
+  let consoleErrorSpy: jest.SpyInstance;
 
   beforeEach(() => {
     // Reset mocks
     jest.clearAllMocks();
+    
+    // Mock console.error to prevent interference with tests
+    consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
     
     // Create mock instances
     mockServer = {
@@ -60,6 +64,9 @@ describe('TaiwanHolidayMcpServer', () => {
     process.removeAllListeners('unhandledRejection');
     process.removeAllListeners('SIGINT');
     process.removeAllListeners('SIGTERM');
+    
+    // Restore console.error
+    consoleErrorSpy.mockRestore();
   });
 
   describe('伺服器初始化', () => {
@@ -71,7 +78,7 @@ describe('TaiwanHolidayMcpServer', () => {
       expect(Server).toHaveBeenCalledWith(
         {
           name: 'taiwan-holiday-mcp',
-          version: '1.0.1',
+          version: '1.0.2',
         },
         {
           capabilities: {

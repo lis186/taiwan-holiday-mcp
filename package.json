@@ -1,6 +1,6 @@
 {
   "name": "taiwan-holiday-mcp",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "MCP server for Taiwan holiday information",
   "license": "MIT",
   "author": "Justin Lee",
@@ -35,7 +35,7 @@
     "package:local": "npm pack"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.12.1"
+    "@modelcontextprotocol/sdk": "^1.13.0"
   },
   "devDependencies": {
     "@types/jest": "^29.5.14",

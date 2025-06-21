@@ -32,7 +32,7 @@ export class TaiwanHolidayMcpServer {
     this.server = new Server(
       {
         name: 'taiwan-holiday-mcp',
-        version: '1.0.1',
+        version: '1.0.2',
       },
       {
         capabilities: {
@@ -46,7 +46,7 @@ export class TaiwanHolidayMcpServer {
     this.holidayService = new HolidayService();
 
     // 初始化健康監控
-    this.healthMonitor = new HealthMonitor('1.0.1');
+    this.healthMonitor = new HealthMonitor('1.0.2');
     this.setupHealthChecks();
 
     // 初始化優雅關機（測試環境中跳過）

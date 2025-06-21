@@ -13,6 +13,7 @@
 | [stage-5-verification.md](./stage-5-verification.md) | 階段 5 | NPX 套件設定 | 跨平台測試、套件配置 |
 | [stage-6-verification.md](./stage-6-verification.md) | 階段 6 | 整合測試與文件 | 品質保證、文件完善 |
 | [stage-7-verification.md](./stage-7-verification.md) | 階段 7 | 專案堅實化改善 | 基礎穩固、架構強化、品質保證、開發體驗 |
+| [stage-8-verification.md](./stage-8-verification.md) | 階段 8 | MCP TypeScript SDK 遷移 | SDK 版本升級、相容性驗證、功能測試 |
 
 ## 驗證標準編號系統
 
@@ -45,4 +46,4 @@ graph LR
 - 所有驗證都應該在實際環境中執行
 - Cursor 整合測試是關鍵驗證點
 - 驗證失敗時應詳細記錄問題和解決方案
-- 保持驗證標準與主計劃的同步更新 
+- 保持驗證標準與主計劃的同步更新

@@ -83,5 +83,8 @@ export default {
   errorOnDeprecated: true,
 
   // 限制並行執行以避免競態條件
-  maxWorkers: 1
+  maxWorkers: 1,
+
+  // 測試環境變數設定
+  setupFiles: ['<rootDir>/tests/jest-env-setup.js']
 }; 
