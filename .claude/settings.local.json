@@ -1,19 +1,6 @@
 {
   "permissions": {
-    "allow": [
-      "Bash(npm run build:*)",
-      "Bash(npm test)",
-      "Bash(npm test:*)",
-      "Bash(npm run lint)",
-      "Bash(timeout 30s npm test:*)",
-      "Bash(rm:*)",
-      "Bash(grep:*)",
-      "Bash(find:*)",
-      "Bash(npm install)",
-      "Bash(ls:*)",
-      "Bash(node:*)",
-      "mcp__ide__getDiagnostics"
-    ],
+    "allow": [],
     "deny": []
   }
 }
