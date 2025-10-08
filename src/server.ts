@@ -119,7 +119,7 @@ export class TaiwanHolidayMcpServer {
                   type: 'integer',
                   description: '要查詢的年份',
                   minimum: 2017,
-                  maximum: 2025
+                  maximum: 2026
                 },
                 month: {
                   type: 'integer',
@@ -315,8 +315,8 @@ export class TaiwanHolidayMcpServer {
     const [, type, yearStr] = match;
     const year = yearStr ? parseInt(yearStr, 10) : undefined;
     
-    if (year && (year < 2017 || year > 2025)) {
-      throw new Error(`不支援的年份: ${year}。支援範圍: 2017-2025`);
+    if (year && (year < 2017 || year > 2026)) {
+      throw new Error(`不支援的年份: ${year}。支援範圍: 2017-2026`);
     }
     
     return { type, year };
@@ -327,7 +327,7 @@ export class TaiwanHolidayMcpServer {
    */
   private getYearsResource() {
     const years = [];
-    for (let year = 2017; year <= 2025; year++) {
+    for (let year = 2017; year <= 2026; year++) {
       years.push(year);
     }
     

@@ -173,7 +173,7 @@ export interface MCPToolError {
  */
 export const SUPPORTED_YEAR_RANGE: YearRange = {
   start: 2017,
-  end: 2025
+  end: 2026
 };
 
 /**
