@@ -161,7 +161,7 @@ describe('TaiwanHolidayMcpServer', () => {
                   type: 'integer',
                   description: '要查詢的年份',
                   minimum: 2017,
-                  maximum: 2025
+                  maximum: 2026
                 },
                 month: {
                   type: 'integer',
@@ -434,7 +434,7 @@ describe('TaiwanHolidayMcpServer', () => {
 
       const data = JSON.parse(result.contents[0].text);
       expect(data.success).toBe(true);
-      expect(data.data.supportedYears).toEqual([2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025]);
+      expect(data.data.supportedYears).toEqual([2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026]);
     });
 
     test('應該處理假期資源', async () => {

@@ -270,7 +270,7 @@ describe('HolidayService 整合測試', () => {
       await expect(service.getHolidaysForYear(2016))
         .rejects.toThrow(HolidayServiceError);
       
-      await expect(service.getHolidaysForYear(2026))
+      await expect(service.getHolidaysForYear(2027))
         .rejects.toThrow(HolidayServiceError);
     });
 

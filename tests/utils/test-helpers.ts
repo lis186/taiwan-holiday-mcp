@@ -186,7 +186,7 @@ export function getTestYears(): number[] {
  * 取得測試用的無效年份列表
  */
 export function getInvalidYears(): number[] {
-  return [2016, 2026, 1999, 2030];
+  return [2016, 2027, 1999, 2030];
 }
 
 /**

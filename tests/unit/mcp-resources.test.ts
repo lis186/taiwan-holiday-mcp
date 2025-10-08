@@ -134,21 +134,21 @@ describe('MCP 資源功能測試', () => {
   });
 
   describe('年份範圍驗證', () => {
-    it('應該支援 2017-2025 年份範圍', () => {
+    it('應該支援 2017-2026 年份範圍', () => {
       const supportedYears: number[] = [];
-      for (let year = 2017; year <= 2025; year++) {
+      for (let year = 2017; year <= 2026; year++) {
         supportedYears.push(year);
       }
       
-      expect(supportedYears).toHaveLength(9);
+      expect(supportedYears).toHaveLength(10);
       expect(supportedYears[0]).toBe(2017);
-      expect(supportedYears[supportedYears.length - 1]).toBe(2025);
+      expect(supportedYears[supportedYears.length - 1]).toBe(2026);
     });
 
     it('應該拒絕超出範圍的年份', () => {
-      const invalidYears = [2016, 2026, 1999, 2030];
+      const invalidYears = [2016, 2027, 1999, 2030];
       invalidYears.forEach(year => {
-        expect(year < 2017 || year > 2025).toBe(true);
+        expect(year < 2017 || year > 2026).toBe(true);
       });
     });
   });

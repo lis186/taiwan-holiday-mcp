@@ -118,7 +118,7 @@ describe('型別定義測試', () => {
 
       expect(range.start).toBeLessThan(range.end);
       expect(SUPPORTED_YEAR_RANGE.start).toBe(2017);
-      expect(SUPPORTED_YEAR_RANGE.end).toBe(2025);
+      expect(SUPPORTED_YEAR_RANGE.end).toBe(2026);
     });
   });
 

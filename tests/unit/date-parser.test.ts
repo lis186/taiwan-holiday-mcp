@@ -65,11 +65,12 @@ describe('Date Parser Utils', () => {
       expect(() => validateYear(2023)).not.toThrow();
       expect(() => validateYear(2017)).not.toThrow();
       expect(() => validateYear(2025)).not.toThrow();
+      expect(() => validateYear(2026)).not.toThrow();
     });
 
     test('應該拒絕無效年份', () => {
       expect(() => validateYear(2016)).toThrow(DateParseError);
-      expect(() => validateYear(2026)).toThrow(DateParseError);
+      expect(() => validateYear(2027)).toThrow(DateParseError);
       expect(() => validateYear(1999)).toThrow(DateParseError);
     });
 
