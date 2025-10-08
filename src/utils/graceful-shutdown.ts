@@ -132,11 +132,8 @@ export class GracefulShutdown {
       });
     }
 
-    // 強制退出信號
-    process.on('SIGKILL', () => {
-      this.log('Received SIGKILL, forcing immediate exit');
-      process.exit(1);
-    });
+    // 注意：SIGKILL 無法被捕獲，這裡不註冊處理器
+    // SIGKILL 會直接終止進程，無法進行優雅關機
 
     // 未捕獲的例外
     process.on('uncaughtException', (error) => {
