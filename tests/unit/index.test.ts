@@ -47,7 +47,7 @@ describe('Taiwan Holiday MCP Server Index Functions', () => {
       const result = await runIndexScript(['--version']);
       
       expect(result.exitCode).toBe(0);
-      expect(result.stderr).toContain('Taiwan Holiday MCP Server v1.0.2');
+      expect(result.stderr).toContain('Taiwan Holiday MCP Server v1.0.3');
       expect(result.stderr).toContain('Node.js');
       expect(result.stderr).toContain('Platform:');
     });
@@ -56,7 +56,7 @@ describe('Taiwan Holiday MCP Server Index Functions', () => {
       const result = await runIndexScript(['-v']);
       
       expect(result.exitCode).toBe(0);
-      expect(result.stderr).toContain('Taiwan Holiday MCP Server v1.0.2');
+      expect(result.stderr).toContain('Taiwan Holiday MCP Server v1.0.3');
     });
   });
 
