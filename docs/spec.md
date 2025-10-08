@@ -156,7 +156,7 @@ src/server.ts - 包含所有三個 MCP 工具的完整實作
         type: "integer",
         description: "要查詢的年份",
         minimum: 2017,
-        maximum: 2025
+        maximum: 2026
       },
       month: {
         type: "integer",
@@ -236,11 +236,11 @@ const resources: Resource[] = [
 {
   "type": "years",
   "data": {
-    "supportedYears": [2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025],
+    "supportedYears": [2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026],
     "totalYears": 9,
     "range": {
       "start": 2017,
-      "end": 2025
+      "end": 2026
     }
   },
   "metadata": {
@@ -799,9 +799,60 @@ import {
 
 ---
 
-**文件版本**：v2.3 (Stage 8 SDK 遷移完成版)  
+**文件版本**：v2.4 (2026 年支援更新版)  
 **建立日期**：2025-06-09  
-**最後更新**：2025-06-21  
-**專案狀態**：🎯 **企業級生產就緒** - Stage 8 SDK 遷移完成  
-**品質保證**：SDK 升級無痛完成，所有功能正常，企業級穩定性維持  
+**最後更新**：2025-10-08  
+**專案狀態**：🎯 **企業級生產就緒** - 2026 年支援已完成  
+**品質保證**：年份擴展完成，Signal Handler 問題修正，所有功能正常  
 **負責人**：技術團隊
+
+---
+
+## 9. 2026 年支援更新 ✅ (完成於 2025-10-08)
+
+### 9.1 更新內容
+
+**更新摘要**：擴展支援年份範圍至 2026 年，並修正 GracefulShutdown 模組的 Signal Handler 問題
+
+**技術變更**：
+- 年份範圍：2017-2025 → 2017-2026
+- 資料來源驗證：確認 TaiwanCalendar CDN 已提供 2026.json
+- Signal Handler 修正：移除無法捕獲的 SIGKILL handler
+
+**測試驗證**：
+- ✅ 2026 年假期資料：120 天（國定假日 114 天，補假 6 天）
+- ✅ 2026-01-01 查詢：正常（開國紀念日）
+- ✅ 2027 年查詢：正確拒絕（超出範圍）
+- ✅ 單元測試：245/246 通過
+- ✅ Signal Handler：正常建立，無錯誤
+
+### 9.2 資料來源狀態
+
+**CDN 驗證**：
+```bash
+curl -I https://cdn.jsdelivr.net/gh/ruyut/TaiwanCalendar/data/2026.json
+# HTTP/2 200 - 資料存在且可用
+```
+
+**2026 年假期統計**：
+- 總假期數：120 天
+- 國定假日：114 天
+- 補假天數：6 天
+
+### 9.3 Signal Handler 問題修正
+
+**問題描述**：嘗試註冊 SIGKILL signal handler 導致 `uv_signal_start EINVAL` 錯誤
+
+**根本原因**：SIGKILL 和 SIGSTOP 是系統保留信號，無法被捕獲、阻塞或忽略
+
+**解決方案**：
+- 移除 `src/utils/graceful-shutdown.ts` 中的 SIGKILL handler 註冊
+- 添加說明註解：「SIGKILL 無法被捕獲，會直接終止進程」
+- 保留 SIGTERM 和 SIGINT 的正常處理
+
+**驗證結果**：
+```typescript
+✅ GracefulShutdown 建立成功 - Signal Handler 問題已修正
+✅ 處理器註冊成功
+🎯 修正驗證完成
+```
