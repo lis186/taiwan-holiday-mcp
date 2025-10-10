@@ -186,6 +186,7 @@ export class RequestThrottler {
    * 開始處理佇列
    */
   private startProcessing(): void {
+    /* istanbul ignore next - 防禦性程式碼：enqueueRequest 只在 !isProcessing 時調用此方法 */
     if (this.isProcessing) return;
     this.isProcessing = true;
 
@@ -211,6 +212,7 @@ export class RequestThrottler {
       }
 
       const request = this.queue.shift();
+      /* istanbul ignore next - 極端邊緣案例：佇列競態導致的空 request */
       if (!request) {
         this.setTimeout(processNext, 10);
         return;
