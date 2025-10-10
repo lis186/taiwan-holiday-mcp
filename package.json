@@ -1,6 +1,6 @@
 {
   "name": "taiwan-holiday-mcp",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "mcpName": "io.github.lis186/taiwan-holiday-mcp",
   "description": "MCP server for Taiwan holiday information",
   "license": "MIT",
