@@ -57,6 +57,9 @@ export class RequestThrottler {
   private isProcessing: boolean = false;
   private requestCounter: number = 0;
   
+  // 跟蹤所有定時器
+  private timers: Set<NodeJS.Timeout> = new Set();
+  
   // 統計資訊
   private stats: ThrottleStats = {
     currentQueueSize: 0,
@@ -73,6 +76,28 @@ export class RequestThrottler {
   constructor(private readonly options: ThrottleOptions) {
     this.requestInterval = 1000 / options.maxRequestsPerSecond;
     this.startProcessing();
+  }
+
+  /**
+   * 創建並跟蹤定時器
+   */
+  private setTimeout(callback: () => void, delay: number): NodeJS.Timeout {
+    const timer = setTimeout(() => {
+      this.timers.delete(timer);
+      if (this.isProcessing) {
+        callback();
+      }
+    }, delay);
+    this.timers.add(timer);
+    return timer;
+  }
+
+  /**
+   * 清除所有定時器
+   */
+  private clearAllTimers(): void {
+    this.timers.forEach(timer => clearTimeout(timer));
+    this.timers.clear();
   }
 
   /**
@@ -122,6 +147,11 @@ export class RequestThrottler {
 
     this.queue.push(request);
     this.stats.currentQueueSize = this.queue.length;
+    
+    // 如果處理循環已停止，重新啟動
+    if (!this.isProcessing) {
+      this.startProcessing();
+    }
   }
 
   /**
@@ -129,17 +159,22 @@ export class RequestThrottler {
    */
   private async waitForQueueSpace(): Promise<void> {
     return new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => {
+      const timeout = this.setTimeout(() => {
         reject(new ThrottleError('Timeout waiting for queue space', this.getStats()));
       }, this.options.requestTimeout);
 
       const checkQueue = (): void => {
+        if (!this.isProcessing) {
+          clearTimeout(timeout);
+          reject(new Error('Throttler stopped'));
+          return;
+        }
         if (this.queue.length < this.options.maxQueueSize) {
           clearTimeout(timeout);
           resolve();
         } else {
           // 100ms 後再次檢查
-          setTimeout(checkQueue, 100);
+          this.setTimeout(checkQueue, 100);
         }
       };
 
@@ -155,9 +190,14 @@ export class RequestThrottler {
     this.isProcessing = true;
 
     const processNext = (): void => {
+      // 檢查是否還在處理中
+      if (!this.isProcessing) {
+        return;
+      }
+      
       if (this.queue.length === 0) {
-        // 佇列為空時稍後再檢查
-        setTimeout(processNext, 10);
+        // 佇列為空，停止處理循環
+        this.isProcessing = false;
         return;
       }
 
@@ -166,13 +206,13 @@ export class RequestThrottler {
 
       if (timeSinceLastRequest < this.requestInterval) {
         // 等待到下一個允許的請求時間
-        setTimeout(processNext, this.requestInterval - timeSinceLastRequest);
+        this.setTimeout(processNext, this.requestInterval - timeSinceLastRequest);
         return;
       }
 
       const request = this.queue.shift();
       if (!request) {
-        setTimeout(processNext, 10);
+        this.setTimeout(processNext, 10);
         return;
       }
 
@@ -185,7 +225,7 @@ export class RequestThrottler {
         this.stats.failedRequests++;
         this.stats.activeRequests = --this.activeRequests;
         request.reject(new ThrottleError('Request timeout', this.getStats()));
-        setTimeout(processNext, 0);
+        this.setTimeout(processNext, 0);
         return;
       }
 
@@ -205,7 +245,12 @@ export class RequestThrottler {
           request.reject(error);
         })
         .finally(() => {
-          setTimeout(processNext, 0);
+          // 原子性檢查：先檢查佇列，再決定是否繼續
+          if (this.queue.length > 0 && this.isProcessing) {
+            this.setTimeout(processNext, 0);
+          } else {
+            this.isProcessing = false;
+          }
         });
     };
 
@@ -257,6 +302,7 @@ export class RequestThrottler {
    */
   stop(): void {
     this.isProcessing = false;
+    this.clearAllTimers();
     this.clearQueue();
   }
 

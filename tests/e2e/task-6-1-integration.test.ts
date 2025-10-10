@@ -16,10 +16,20 @@ describe('Task 6.1: 完整整合測試與品質保證', () => {
   const projectRoot = process.cwd();
   const distPath = join(projectRoot, 'dist');
   let child: ChildProcess | null = null;
+  const serverInstances: TaiwanHolidayMcpServer[] = [];
 
+  afterEach(async () => {
+    // 清理所有 server 實例
+    for (const server of serverInstances) {
+      if (server && typeof (server as any).holidayService?.destroy === 'function') {
+        (server as any).holidayService.destroy();
+      }
+    }
+    serverInstances.length = 0;
 
+    // 等待異步清理完成
+    await new Promise(resolve => setTimeout(resolve, 100));
 
-  afterEach(() => {
     if (child) {
       child.kill('SIGTERM');
       child = null;
@@ -29,6 +39,7 @@ describe('Task 6.1: 完整整合測試與品質保證', () => {
   describe('T6.1.1: MCP 協議相容性測試', () => {
     test('應該正確處理工具列表查詢', async () => {
       const server = new TaiwanHolidayMcpServer();
+      serverInstances.push(server);
       
       // 模擬 MCP 工具列表請求
       const tools = [
@@ -46,6 +57,7 @@ describe('Task 6.1: 完整整合測試與品質保證', () => {
 
     test('應該正確處理工具執行', async () => {
       const server = new TaiwanHolidayMcpServer();
+      serverInstances.push(server);
       
       // 測試基本工具執行（使用測試資料）
       const testDate = '2024-01-01';
@@ -57,6 +69,7 @@ describe('Task 6.1: 完整整合測試與品質保證', () => {
 
     test('應該正確處理資源存取', async () => {
       const server = new TaiwanHolidayMcpServer();
+      serverInstances.push(server);
       
       // 驗證資源處理能力
       expect(server).toBeDefined();
@@ -75,6 +88,7 @@ describe('Task 6.1: 完整整合測試與品質保證', () => {
 
     test('應該正確處理錯誤情況', async () => {
       const server = new TaiwanHolidayMcpServer();
+      serverInstances.push(server);
       
       // 驗證錯誤處理機制存在
       expect(server).toBeDefined();
@@ -93,6 +107,7 @@ describe('Task 6.1: 完整整合測試與品質保證', () => {
       
       // 測試伺服器初始化時間
       const server = new TaiwanHolidayMcpServer();
+      serverInstances.push(server);
       
       const initTime = Date.now() - startTime;
       
@@ -175,6 +190,7 @@ describe('Task 6.1: 完整整合測試與品質保證', () => {
       for (let i = 0; i < 3; i++) {
         // 建立新的伺服器實例
         const tempServer = new TaiwanHolidayMcpServer();
+        serverInstances.push(tempServer);
         expect(tempServer).toBeDefined();
       }
 
@@ -193,6 +209,7 @@ describe('Task 6.1: 完整整合測試與品質保證', () => {
 
     test('長時間運行穩定性測試', async () => {
       const server = new TaiwanHolidayMcpServer();
+      serverInstances.push(server);
       
       // 模擬長時間運行
       const startTime = Date.now();
@@ -214,6 +231,7 @@ describe('Task 6.1: 完整整合測試與品質保證', () => {
 
     test('併發請求處理測試', async () => {
       const server = new TaiwanHolidayMcpServer();
+      serverInstances.push(server);
       
       // 模擬併發請求
       const concurrentPromises: Promise<boolean>[] = [];
@@ -243,6 +261,7 @@ describe('Task 6.1: 完整整合測試與品質保證', () => {
 
     test('錯誤恢復能力測試', async () => {
       const server = new TaiwanHolidayMcpServer();
+      serverInstances.push(server);
       
       // 測試伺服器在各種錯誤情況下的恢復能力
       expect(server).toBeDefined();

@@ -14,6 +14,12 @@ describe('MCP 協議測試', () => {
   });
 
   afterEach(() => {
+    // 清理 HolidayService 的定時器
+    const holidayService = (server as any).holidayService;
+    if (holidayService && typeof holidayService.destroy === 'function') {
+      holidayService.destroy();
+    }
+    
     // 清理事件監聽器
     process.removeAllListeners('uncaughtException');
     process.removeAllListeners('unhandledRejection');

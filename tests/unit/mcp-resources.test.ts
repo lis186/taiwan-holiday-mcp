@@ -14,6 +14,12 @@ describe('MCP 資源功能測試', () => {
   });
 
   afterEach(() => {
+    // 清理 HolidayService 的定時器
+    const holidayService = (server as any).holidayService;
+    if (holidayService && typeof holidayService.destroy === 'function') {
+      holidayService.destroy();
+    }
+    
     // 確保測試後清理
     process.removeAllListeners('SIGINT');
     process.removeAllListeners('SIGTERM');

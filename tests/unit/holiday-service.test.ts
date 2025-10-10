@@ -25,10 +25,18 @@ describe('HolidayService', () => {
     mockFetch.mockClear();
   });
 
+  afterEach(() => {
+    // 清理定時器和資源
+    if (service && typeof service.destroy === 'function') {
+      service.destroy();
+    }
+  });
+
   describe('建構子', () => {
     test('應該使用預設選項建立服務', () => {
       const defaultService = new HolidayService();
       expect(defaultService).toBeInstanceOf(HolidayService);
+      defaultService.destroy();
     });
 
     test('應該接受自訂選項', () => {
@@ -37,6 +45,7 @@ describe('HolidayService', () => {
         30 * 60 * 1000 // 30分鐘快取
       );
       expect(customService).toBeInstanceOf(HolidayService);
+      customService.destroy();
     });
   });
 
@@ -345,23 +354,27 @@ describe('HolidayService', () => {
       // 建立一個短 TTL 的服務
       const shortTtlService = new HolidayService({}, 100); // 100ms TTL
       
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: async () => testHolidays
-      });
+      try {
+        mockFetch.mockResolvedValue({
+          ok: true,
+          json: async () => testHolidays
+        });
 
-      await shortTtlService.getHolidaysForYear(2024);
-      expect(mockFetch).toHaveBeenCalledTimes(1);
-      
-      // 等待快取過期
-      await new Promise(resolve => setTimeout(resolve, 150));
-      
-      // 清除過期快取
-      shortTtlService.clearExpiredCache();
-      
-      // 再次請求應該重新發送 HTTP 請求
-      await shortTtlService.getHolidaysForYear(2024);
-      expect(mockFetch).toHaveBeenCalledTimes(2);
+        await shortTtlService.getHolidaysForYear(2024);
+        expect(mockFetch).toHaveBeenCalledTimes(1);
+        
+        // 等待快取過期
+        await new Promise(resolve => setTimeout(resolve, 150));
+        
+        // 清除過期快取
+        shortTtlService.clearExpiredCache();
+        
+        // 再次請求應該重新發送 HTTP 請求
+        await shortTtlService.getHolidaysForYear(2024);
+        expect(mockFetch).toHaveBeenCalledTimes(2);
+      } finally {
+        shortTtlService.destroy();
+      }
     });
   });
 
@@ -383,26 +396,34 @@ describe('HolidayService', () => {
     test('應該處理請求超時', async () => {
       const timeoutService = new HolidayService({ timeout: 100, retries: 1 });
       
-      // 模擬所有請求都超時（包括重試）
-      const abortError = Object.assign(new Error('The operation was aborted'), {
-        name: 'AbortError'
-      });
-      mockFetch.mockRejectedValue(abortError);
+      try {
+        // 模擬所有請求都超時（包括重試）
+        const abortError = Object.assign(new Error('The operation was aborted'), {
+          name: 'AbortError'
+        });
+        mockFetch.mockRejectedValue(abortError);
 
-      await expect(timeoutService.getHolidaysForYear(2024))
-        .rejects.toThrow(HolidayServiceError);
+        await expect(timeoutService.getHolidaysForYear(2024))
+          .rejects.toThrow(HolidayServiceError);
+      } finally {
+        timeoutService.destroy();
+      }
     });
 
     test('應該在所有重試失敗後拋出錯誤', async () => {
       const retryService = new HolidayService({ retries: 1, retryDelay: 10 });
       
-      // 模擬所有請求都失敗
-      mockFetch.mockRejectedValue(new Error('Server Error'));
+      try {
+        // 模擬所有請求都失敗
+        mockFetch.mockRejectedValue(new Error('Server Error'));
 
-      await expect(retryService.getHolidaysForYear(2024))
-        .rejects.toThrow('經過 2 次嘗試後仍無法獲取資料');
-      
-      expect(mockFetch).toHaveBeenCalledTimes(2); // 初始請求 + 1次重試
+        await expect(retryService.getHolidaysForYear(2024))
+          .rejects.toThrow('經過 2 次嘗試後仍無法獲取資料');
+        
+        expect(mockFetch).toHaveBeenCalledTimes(2); // 初始請求 + 1次重試
+      } finally {
+        retryService.destroy();
+      }
     });
   });
 

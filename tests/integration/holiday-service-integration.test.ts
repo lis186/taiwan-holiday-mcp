@@ -36,6 +36,15 @@ describe('HolidayService 整合測試', () => {
     service.clearCache(); // 確保測試獨立性
   });
 
+  afterEach(async () => {
+    // 清理服務資源
+    if (service && typeof service.destroy === 'function') {
+      service.destroy();
+    }
+    // 等待異步清理完成
+    await new Promise(resolve => setTimeout(resolve, 50));
+  });
+
   describe('端到端查詢流程測試', () => {
     test('應該完成完整的假期查詢流程', async () => {
       if (!networkAvailable) {
@@ -255,14 +264,16 @@ describe('HolidayService 整合測試', () => {
       // 建立一個會重試的服務
       const retryService = new HolidayService({ retries: 2, retryDelay: 100 });
       
-      // 第一次查詢可能失敗，但應該能恢復
       try {
+        // 第一次查詢可能失敗，但應該能恢復
         const holidays = await retryService.getHolidaysForYear(2024);
         expect(holidays).toBeDefined();
         expect(Array.isArray(holidays)).toBe(true);
       } catch (error) {
         // 如果真的失敗了，應該是 HolidayServiceError
         expect(error).toBeInstanceOf(HolidayServiceError);
+      } finally {
+        retryService.destroy();
       }
     }, 30000);
 
@@ -368,10 +379,10 @@ describe('HolidayService 整合測試', () => {
         return;
       }
 
+      // 建立短 TTL 的服務
+      const shortTtlService = new HolidayService({}, 100); // 100ms TTL
+      
       try {
-        // 建立短 TTL 的服務
-        const shortTtlService = new HolidayService({}, 100); // 100ms TTL
-        
         // 載入資料
         await shortTtlService.getHolidaysForYear(2024);
         
@@ -393,6 +404,8 @@ describe('HolidayService 整合測試', () => {
           return;
         }
         throw error;
+      } finally {
+        shortTtlService.destroy();
       }
     }, 30000);
   });
