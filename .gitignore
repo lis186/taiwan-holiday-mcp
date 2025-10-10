@@ -20,6 +20,10 @@ coverage/
 .env.test.local
 .env.production.local
 
+# MCP Registry tokens
+.mcpregistry_github_token
+.mcpregistry_registry_token
+
 # IDE
 .vscode/
 .idea/
