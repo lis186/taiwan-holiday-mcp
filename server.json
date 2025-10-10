@@ -1,0 +1,21 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-09-29/server.schema.json",
+  "name": "taiwan-holiday",
+  "description": "MCP server for Taiwan holiday information with accurate national holidays and make-up workdays data",
+  "repository": {
+    "url": "https://github.com/lis186/taiwan-holiday-mcp",
+    "source": "github"
+  },
+  "version": "1.0.3",
+  "packages": [
+    {
+      "registryType": "npm",
+      "registryBaseUrl": "https://registry.npmjs.org",
+      "identifier": "taiwan-holiday-mcp",
+      "version": "1.0.3",
+      "transport": {
+        "type": "stdio"
+      }
+    }
+  ]
+}
