@@ -27,6 +27,7 @@ function showVersion(): void {
   } catch (error) {
     console.error('Taiwan Holiday MCP Server (版本資訊不可用)');
   }
+  process.exit(0);
 }
 
 /**
@@ -55,6 +56,7 @@ Taiwan Holiday MCP Server - 台灣假期 MCP 伺服器
   taiwan-holiday-mcp --debug
   DEBUG=true taiwan-holiday-mcp
 `);
+  process.exit(0);
 }
 
 /**

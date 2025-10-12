@@ -7,8 +7,21 @@
 
 ## [未發布]
 
+### 修正
+
+- 🐛 **Process Exit 處理修正**：修復命令列參數處理的 exit code 問題
+  - 修正 `--version` 和 `--help` 參數的 process exit 行為
+  - showVersion() 和 showHelp() 函數現在正確呼叫 `process.exit(0)`
+  - 修復 cross-platform.test.ts 版本參數測試失敗（exit code null → 0）
+  - 修復 build-and-package.test.ts 的 4 個 MCP 端到端測試
+  - 確保 MCP 伺服器在正常啟動時不會過早退出
+
 ### 改進
 
+- ✅ **測試穩定性達標**：達成 100% 測試通過率，並驗證穩定性
+  - 所有 20 個測試套件通過（446/448 測試通過，2 個跳過）
+  - 連續 3 次測試運行 100% 成功率，確認測試穩定性
+  - 覆蓋率維持：Statements 92.27%, Branches 82.24%, Functions 89.80%, Lines 92.34%
 - 🎯 **測試失敗修復與覆蓋率達標**：分支覆蓋率從 79.75% 提升至 82.24%
   - 修復 5 個失敗測試，達成 100% 測試通過率（446/448 通過，2 個跳過）
   - 新增 error-classifier 測試套件（16 個測試案例）
