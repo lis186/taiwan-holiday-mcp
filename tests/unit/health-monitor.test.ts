@@ -514,10 +514,23 @@ describe('DefaultHealthChecks', () => {
     });
 
     test('記憶體使用低於閾值時應該返回 HEALTHY', async () => {
+      // Mock process.memoryUsage 返回可預測的低記憶體使用率
+      const originalMemoryUsage = process.memoryUsage;
+      process.memoryUsage = jest.fn().mockReturnValue({
+        heapUsed: 50 * 1024 * 1024,  // 50 MB
+        heapTotal: 100 * 1024 * 1024, // 100 MB
+        external: 0,
+        arrayBuffers: 0,
+        rss: 0,
+      });
+
       const check = DefaultHealthChecks.memoryUsage(99); // 設定很高的閾值
       const result = await check();
 
       expect(result.status).toBe(HealthStatus.HEALTHY);
+      
+      // 恢復原始函數
+      process.memoryUsage = originalMemoryUsage;
     });
 
     test('記憶體使用超過閾值時應該返回 UNHEALTHY', async () => {

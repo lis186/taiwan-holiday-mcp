@@ -34,9 +34,11 @@ function runIndexScript(args: string[] = []): Promise<{stdout: string, stderr: s
 
     // 給 MCP 伺服器一些時間啟動後關閉
     if (args.length === 0 || args.includes('--debug') || args.includes('--port')) {
+      // 除錯模式需要更多時間來輸出所有信息
+      const timeout = args.includes('--debug') ? 2000 : 1000;
       setTimeout(() => {
         process.kill('SIGTERM');
-      }, 1000);
+      }, timeout);
     }
   });
 }
@@ -47,7 +49,7 @@ describe('Taiwan Holiday MCP Server Index Functions', () => {
       const result = await runIndexScript(['--version']);
       
       expect(result.exitCode).toBe(0);
-      expect(result.stderr).toContain('Taiwan Holiday MCP Server v1.0.4');
+      expect(result.stderr).toContain('Taiwan Holiday MCP Server v1.0.5');
       expect(result.stderr).toContain('Node.js');
       expect(result.stderr).toContain('Platform:');
     });
@@ -56,7 +58,7 @@ describe('Taiwan Holiday MCP Server Index Functions', () => {
       const result = await runIndexScript(['-v']);
       
       expect(result.exitCode).toBe(0);
-      expect(result.stderr).toContain('Taiwan Holiday MCP Server v1.0.4');
+      expect(result.stderr).toContain('Taiwan Holiday MCP Server v1.0.5');
     });
   });
 
@@ -148,9 +150,10 @@ describe('Taiwan Holiday MCP Server Index Functions', () => {
           stderr += data.toString();
         });
 
+        // 給除錯模式更多時間來輸出所有信息
         setTimeout(() => {
           childProcess.kill('SIGTERM');
-        }, 1000);
+        }, 2000);
 
         childProcess.on('close', () => {
           expect(stderr).toContain('除錯模式已啟用');

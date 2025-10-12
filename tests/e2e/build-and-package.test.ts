@@ -92,7 +92,7 @@ describe('建置與打包完整測試', () => {
       const result = await runCommand('node', [join(distPath, 'index.js'), '--version']);
       
       expect(result.exitCode).toBe(0);
-      expect(result.stderr).toContain('Taiwan Holiday MCP Server v1.0.4');
+      expect(result.stderr).toContain('Taiwan Holiday MCP Server v1.0.5');
       expect(result.stderr).toContain('Node.js');
       expect(result.stderr).toContain('Platform:');
     });
@@ -262,20 +262,21 @@ describe('建置與打包完整測試', () => {
 
   describe('套件打包測試', () => {
     test('應該能夠成功打包', async () => {
-      const result = await runCommand('npm', ['run', 'package:test']);
+      // npm pack --dry-run 需要先執行 build，需要更長的 timeout
+      const result = await runCommand('npm', ['run', 'package:test'], { timeout: 30000 });
       
       expect(result.exitCode).toBe(0);
-      expect(result.stdout).toContain('taiwan-holiday-mcp-1.0.4.tgz');
+      expect(result.stdout).toContain('taiwan-holiday-mcp-1.0.5.tgz');
       expect(result.stdout).toContain('dist/');
-    });
+    }, 35000); // Jest 測試 timeout 略大於 runCommand timeout
 
     test('打包內容應該包含必要檔案', async () => {
-      const result = await runCommand('npm', ['pack', '--dry-run'], { timeout: 10000 });
+      const result = await runCommand('npm', ['pack', '--dry-run'], { timeout: 15000 });
       
       expect(result.exitCode).toBe(0);
       
       // 檢查是否有 tarball 檔案名稱
-      expect(result.stdout).toContain('taiwan-holiday-mcp-1.0.4.tgz');
+      expect(result.stdout).toContain('taiwan-holiday-mcp-1.0.5.tgz');
       
       // 如果有詳細內容列表，檢查必要檔案
       if (result.stdout.includes('npm notice Tarball Contents')) {
@@ -284,7 +285,7 @@ describe('建置與打包完整測試', () => {
         expect(result.stdout).toContain('README.md');
         expect(result.stdout).toContain('package.json');
       }
-    });
+    }, 20000); // Jest 測試 timeout 略大於 runCommand timeout
   });
 });
 
