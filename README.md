@@ -366,6 +366,13 @@ npm run test:coverage
 
 在法律允許的最大範圍內，本專案的作者和貢獻者不對因使用本軟體而產生的任何直接、間接、偶然、特殊或後果性損害承擔責任。
 
+## 🔗 相關專案
+
+- [`taiwan-holiday-cli`](https://github.com/lis186/taiwan-holiday-cli) —— 同一資料來源的命令列工具，適合終端機與腳本使用
+- [`taiwan-holiday-skills`](https://github.com/lis186/taiwan-holiday-skills) —— 打包好的 Claude Agent Skill（底層透過 CLI 呼叫）
+
+三個專案共享 MAJOR 版號，目前為 2.x 世代。
+
 ## 📄 授權條款
 
 本專案採用 MIT 授權條款。詳見 [LICENSE](LICENSE) 檔案。
@@ -382,8 +389,6 @@ npm run test:coverage
 
 ---
 
-**版本**: 1.0.4
-**最後更新**: 2025-10-10  
 **支援年份**: 2017 年起，上限跟隨上游資料（新年度發布即自動支援）  
 **MCP SDK**: @modelcontextprotocol/sdk ^1.13.0  
 **Node.js 需求**: ≥ 18.0.0  
