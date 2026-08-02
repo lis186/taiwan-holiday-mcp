@@ -449,7 +449,7 @@ describe('RequestThrottler', () => {
       await jest.runOnlyPendingTimersAsync();
       
       // 验证第 4 个是背压超时
-      const error4 = await promise4;
+      const error4 = (await promise4) as Error;
       expect(error4).toBeInstanceOf(ThrottleError);
       expect(error4.message).toContain('Timeout waiting for queue space');
     });
@@ -479,8 +479,8 @@ describe('RequestThrottler', () => {
       throttler.stop();
       
       // 验证队列中的请求被拒绝（promise2 和 promise3）
-      const error2 = await promise2;
-      const error3 = await promise3;
+      const error2 = (await promise2) as Error;
+      const error3 = (await promise3) as Error;
       
       expect(error2).toBeInstanceOf(ThrottleError);
       expect(error2.message).toContain('Queue cleared');
@@ -541,7 +541,7 @@ describe('RequestThrottler', () => {
       await jest.advanceTimersByTimeAsync(1100);
       await jest.runOnlyPendingTimersAsync();
 
-      const error2 = await promise2;
+      const error2 = (await promise2) as Error;
       expect(error2).toBeInstanceOf(ThrottleError);
       expect(error2.message).toContain('Request timeout');
     });

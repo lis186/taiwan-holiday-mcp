@@ -5,6 +5,49 @@
 格式基於 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.0.0/)，
 並且本專案遵循 [語意化版本](https://semver.org/lang/zh-TW/)。
 
+## [2.0.0] - 2026-08-02
+
+年份支援不再寫死在套件裡，並修正兩個長期存在的統計錯誤。
+
+MAJOR 版號在 `taiwan-holiday-cli`、`taiwan-holiday-mcp`、`taiwan-holiday-skills`
+三個專案間共享，代表「同一世代、互相搭配」；MINOR/PATCH 各自獨立。
+
+### 破壞性變更
+
+- **`HolidayStats.nationalHolidays` 的語意變更。** 過去把 `description` 為空的
+  一般週末也算成國定假日，2026 年因此回報 114 個「國定假日」（實際具名的只有 16 個，
+  另外 98 個是週末）。現在只計具名國定假日，週末移到新欄位 `weekends`。
+- **`get_holiday_stats` 回傳的 `holidayTypes` 數值變更**（見下方修正），
+  先前的數字在全部 11 個年度都是錯的。
+- `src/types.ts` 移除 `SUPPORTED_YEAR_RANGE`，改用 `MIN_SUPPORTED_YEAR`、
+  `getMaxQueryableYear()`、`getQueryableYearRange()`。（此常數並未從套件入口匯出，
+  對僅使用 MCP server 的使用者無影響。）
+
+### 新增
+
+- `weekends` 欄位與 `HOLIDAY_TYPES.WEEKEND` 分類。
+- `scripts/upstream-canary.mjs` 與每月排程的 `upstream-canary` workflow。
+- 協議層端到端測試：透過真實 JSON-RPC 驗證 tool schema 的年份上限、
+  資源清單、以及統計數值（用 `RUN_UPSTREAM_E2E=1` 啟用）。
+
+### 修正
+
+- **年份上限不再寫死。** `src/server.ts` 原本有三處魔術數字完全沒有引用
+  `SUPPORTED_YEAR_RANGE`：tool schema 的 `maximum`、資源 URI 驗證（含手寫錯誤訊息）、
+  以及產生 years 資源的迴圈。三處現在共用 `getQueryableYearRange()` 這個單一來源。
+  只改常數而不改這三處的話，MCP 對外的 schema 仍會把年份卡在舊上限。
+- **資源清單不再寫死年份。** 原本固定列出 `holidays/2024`、`holidays/2025`、
+  `stats/2024`、`stats/2025`；現在取上游實際可用的最近 3 個年度。
+- **`holidayTypes` 重複計數。** 與 CLI 相同的缺陷：分類桶與具體假日名共用一個 map，
+  當 `description` 等於分類桶名稱時被加兩次。影響 `補假`（10 個年度）與
+  `調整放假`（2017–2023）。
+- **探測失敗不再被誤判為「該年份不存在」。** 只有 HTTP 404 代表上游沒有這一年；
+  網路故障、超時、5xx 會明確報錯，而不是安靜回報一個較短的年份範圍。
+- 查詢上游尚未發布的年度時，錯誤訊息從籠統的 `HTTP 404: Not Found`
+  改為「上游尚未發布 N 年資料」。
+- 探測改用 HEAD（原本走 GET），與 CLI 端一致。
+- 測試不再寫死版本字串，改從 `package.json` 讀取。
+
 ## [未發布]
 
 ### 修正

@@ -4,7 +4,7 @@
  * 支援多種日期格式的解析、驗證和轉換功能
  */
 
-import { DateFormat, ErrorType, SUPPORTED_YEAR_RANGE } from '../types.js';
+import { DateFormat, ErrorType, getQueryableYearRange, taipeiDateParts } from '../types.js';
 
 /**
  * 日期解析結果介面
@@ -68,12 +68,16 @@ export function getDaysInMonth(year: number, month: number): number {
 }
 
 /**
- * 驗證年份是否在支援範圍內
+ * 驗證年份是否值得向上游查詢。
+ *
+ * 只擋掉上游確定沒有的（早於 2017）與荒謬的輸入；
+ * 某一年到底有沒有資料，交給實際抓取的結果回答。
  */
 export function validateYear(year: number): void {
-  if (year < SUPPORTED_YEAR_RANGE.start || year > SUPPORTED_YEAR_RANGE.end) {
+  const { start, end } = getQueryableYearRange();
+  if (year < start || year > end) {
     throw new DateParseError(
-      `年份 ${year} 超出支援範圍 (${SUPPORTED_YEAR_RANGE.start}-${SUPPORTED_YEAR_RANGE.end})`,
+      `年份 ${year} 超出可查詢範圍 (${start}-${end})`,
       ErrorType.INVALID_YEAR,
       year.toString()
     );
@@ -237,13 +241,8 @@ export function isValidDate(dateString: string, expectedFormat?: DateFormat): bo
  * 取得今天的日期（台北時區）
  */
 export function getTodayInTaipei(): ParsedDate {
-  const now = new Date();
-  // 轉換為台北時區 (UTC+8)
-  const taipeiTime = new Date(now.getTime() + (8 * 60 * 60 * 1000));
-  
-  const year = taipeiTime.getUTCFullYear();
-  const month = taipeiTime.getUTCMonth() + 1;
-  const day = taipeiTime.getUTCDate();
+  // 用 types.ts 的共用函式，不在此另算一次 UTC+8 偏移
+  const { year, month, day } = taipeiDateParts();
   
   const normalized = `${year}${month.toString().padStart(2, '0')}${day.toString().padStart(2, '0')}`;
   

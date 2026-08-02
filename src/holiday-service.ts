@@ -4,7 +4,16 @@
  * 負責從 TaiwanCalendar CDN 獲取假期資料，提供快取機制和完整的錯誤處理
  */
 
-import { Holiday, HolidayStats, ErrorType, SUPPORTED_YEAR_RANGE, HOLIDAY_TYPES } from './types.js';
+import {
+  Holiday,
+  HolidayStats,
+  ErrorType,
+  MIN_SUPPORTED_YEAR,
+  getMaxQueryableYear,
+  getQueryableYearRange,
+  getCurrentYearInTaipei,
+  HOLIDAY_TYPES
+} from './types.js';
 import { parseDate, ParsedDate, DateParseError } from './utils/date-parser.js';
 import { CircuitBreaker, CircuitBreakerOptions, CircuitBreakerError } from './utils/circuit-breaker.js';
 import { ErrorClassifier, ErrorCategory } from './utils/error-classifier.js';
@@ -35,6 +44,9 @@ interface RequestOptions {
   retryDelay: number;
 }
 
+/** 年份探測結果的存活時間 */
+const AVAILABLE_YEARS_TTL_MS = 24 * 60 * 60 * 1000;
+
 /**
  * 假期資料服務錯誤
  */
@@ -58,6 +70,8 @@ export class HolidayService {
   
   /** 智慧快取系統 */
   private readonly smartCache: SmartCache<Holiday[]>;
+  /** 年份探測結果（smartCache 的型別是 Holiday[]，放不進來） */
+  private availableYearsCache?: { years: number[]; fetchedAt: number };
   
   /** Circuit Breaker */
   private readonly circuitBreaker: CircuitBreaker;
@@ -100,6 +114,17 @@ export class HolidayService {
       recoveryTimeout: 30000,   // 30 秒後嘗試恢復
       monitoringPeriod: 60000,  // 監控 60 秒
       isExpectedError: (error) => {
+        // 「年份層面的問題」是正常使用情境，不是服務故障：
+        // 查詢尚未發布的年度（例如年末規劃明年）會拿到 404，若把它算成
+        // 斷路器失敗，連續 5 次就會開啟斷路器，之後連有資料的有效年份
+        // 都被拒絕 —— 使用者的正常操作被轉成服務中斷。
+        //
+        // 不改 ErrorClassifier：它被其他呼叫端共用，而且它只用訊息字串
+        // 比對（'validation' / 'invalid'），把中文訊息歸為 TEMPORARY。
+        // 這裡的政策屬於斷路器，就放在斷路器的設定上。
+        if (error instanceof HolidayServiceError && error.type === ErrorType.INVALID_YEAR) {
+          return true;
+        }
         const classification = ErrorClassifier.classify(error);
         return classification.category === ErrorCategory.EXPECTED;
       }
@@ -117,13 +142,72 @@ export class HolidayService {
   }
 
   /**
+   * 探測上游實際有哪些年份的資料。
+   *
+   * 2017 到今年視為必然存在（上游維護完整歷史），
+   * 今年之後逐年往前探測，遇到第一個缺漏就停。
+   */
+  async getAvailableYears(): Promise<number[]> {
+    const cached = this.availableYearsCache;
+    if (cached && Date.now() - cached.fetchedAt < AVAILABLE_YEARS_TTL_MS) {
+      return cached.years;
+    }
+
+    const currentYear = getCurrentYearInTaipei();
+    const years: number[] = [];
+
+    for (let year = MIN_SUPPORTED_YEAR; year <= currentYear; year++) {
+      years.push(year);
+    }
+
+    const maxYear = getMaxQueryableYear();
+    for (let year = currentYear + 1; year <= maxYear; year++) {
+      if (!(await this.isYearAvailable(year))) {
+        break;
+      }
+      years.push(year);
+    }
+
+    this.availableYearsCache = { years, fetchedAt: Date.now() };
+    return years;
+  }
+
+  /**
+   * 上游是否有這一年的資料。
+   *
+   * 只有 404 代表「上游確定沒有這一年」。網路故障、超時、5xx 一律往外拋 ——
+   * 把它們也當成 404 的話，斷網時會安靜地回報一個較短的年份範圍，
+   * 那是個看起來完全正常的錯誤答案，比明確失敗糟得多。
+   *
+   * 用 HEAD 而非 GET：只需要知道檔案存不存在，與 CLI 端的探測保持一致。
+   */
+  private async isYearAvailable(year: number): Promise<boolean> {
+    const response = await this.fetchWithTimeout(
+      `${this.baseUrl}/${year}.json`,
+      this.options.timeout!,
+      'HEAD'
+    );
+    if (response.status === 404) {
+      return false;
+    }
+    if (!response.ok) {
+      throw new HolidayServiceError(
+        `探測 ${year} 年時上游回應 HTTP ${response.status}`,
+        ErrorType.API_ERROR
+      );
+    }
+    return true;
+  }
+
+  /**
    * 獲取指定年份的假期資料
    */
   async getHolidaysForYear(year: number): Promise<Holiday[]> {
-    // 驗證年份
-    if (year < SUPPORTED_YEAR_RANGE.start || year > SUPPORTED_YEAR_RANGE.end) {
+    // 只擋荒謬輸入；該年份有沒有資料由上游回答
+    const { start, end } = getQueryableYearRange();
+    if (year < start || year > end) {
       throw new HolidayServiceError(
-        `年份 ${year} 超出支援範圍 (${SUPPORTED_YEAR_RANGE.start}-${SUPPORTED_YEAR_RANGE.end})`,
+        `年份 ${year} 超出可查詢範圍 (${start}-${end})`,
         ErrorType.INVALID_YEAR
       );
     }
@@ -280,6 +364,7 @@ export class HolidayService {
    */
   clearCache(): void {
     this.smartCache.clear();
+    this.availableYearsCache = undefined;
   }
 
 
@@ -295,7 +380,28 @@ export class HolidayService {
     for (let attempt = 0; attempt <= this.options.retries!; attempt++) {
       try {
         const response = await this.fetchWithTimeout(url, this.options.timeout!);
-        
+
+        // 404 代表上游確定沒有這一年，重試無意義。
+        //
+        // 但兩種 404 的性質完全不同，錯誤型別也必須不同：
+        // - 未來年度尚未發布 → INVALID_YEAR，正常使用情境，斷路器不計入
+        // - 已發布年度資料消失 → API_ERROR，上游異常，斷路器**要**計入
+        //
+        // 若後者也標成 INVALID_YEAR，上游整批資料消失時斷路器不會開，
+        // 服務會持續對每個請求打一次注定失敗的網路。
+        if (response.status === 404) {
+          if (year > getCurrentYearInTaipei()) {
+            throw new HolidayServiceError(
+              `上游尚未發布 ${year} 年資料。中華民國政府行政機關辦公日曆表通常在前一年年中公布。`,
+              ErrorType.INVALID_YEAR
+            );
+          }
+          throw new HolidayServiceError(
+            `上游缺少 ${year} 年資料。該年度應已發布，可能是上游資料異常，請回報 ruyut/TaiwanCalendar。`,
+            ErrorType.API_ERROR
+          );
+        }
+
         if (!response.ok) {
           throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
@@ -308,8 +414,15 @@ export class HolidayService {
         
         return data as Holiday[];
       } catch (error) {
+        // 這個 try 區塊裡的 HolidayServiceError 全都來自 404 分支 —— 那是上游的
+        // 確定性答案（無論「尚未發布」或「已發布卻消失」），重試與包裝都只會
+        // 模糊掉原因。型別差異（INVALID_YEAR / API_ERROR）留給斷路器判斷是否計入。
+        if (error instanceof HolidayServiceError) {
+          throw error;
+        }
+
         lastError = error instanceof Error ? error : new Error(String(error));
-        
+
         // 使用錯誤分類器決定是否應該重試
         const classification = ErrorClassifier.classify(lastError);
         
@@ -343,12 +456,17 @@ export class HolidayService {
   /**
    * 帶超時的 fetch 請求
    */
-  private async fetchWithTimeout(url: string, timeout: number): Promise<Response> {
+  private async fetchWithTimeout(
+    url: string,
+    timeout: number,
+    method: 'GET' | 'HEAD' = 'GET'
+  ): Promise<Response> {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeout);
-    
+
     try {
       const response = await fetch(url, {
+        method,
         signal: controller.signal,
         headers: {
           'Accept': 'application/json',
@@ -457,6 +575,7 @@ export class HolidayService {
     const holidayTypes: Record<string, number> = {};
     let totalHolidays = 0;
     let nationalHolidays = 0;
+    let weekends = 0;
     let compensatoryDays = 0;
     let adjustedHolidays = 0;
     let workingDays = 0;
@@ -464,23 +583,31 @@ export class HolidayService {
     for (const holiday of holidays) {
       if (holiday.isHoliday) {
         totalHolidays++;
-        
+
         // 分析假日類型
         const description = holiday.description.toLowerCase();
-        
+        let categoryKey: string;
+
         if (description.includes('補假')) {
           compensatoryDays++;
-          holidayTypes[HOLIDAY_TYPES.COMPENSATORY] = (holidayTypes[HOLIDAY_TYPES.COMPENSATORY] || 0) + 1;
+          categoryKey = HOLIDAY_TYPES.COMPENSATORY;
         } else if (description.includes('調整放假')) {
           adjustedHolidays++;
-          holidayTypes[HOLIDAY_TYPES.ADJUSTED] = (holidayTypes[HOLIDAY_TYPES.ADJUSTED] || 0) + 1;
+          categoryKey = HOLIDAY_TYPES.ADJUSTED;
+        } else if (!holiday.description) {
+          // 上游把一般週末的 description 留空。這些日子過去被算進
+          // nationalHolidays，導致 2026 年回報 114 個「國定假日」
+          // （實際具名國定假日只有 16 個，其餘 98 個是週末）。
+          weekends++;
+          categoryKey = HOLIDAY_TYPES.WEEKEND;
         } else {
           nationalHolidays++;
-          holidayTypes[HOLIDAY_TYPES.NATIONAL] = (holidayTypes[HOLIDAY_TYPES.NATIONAL] || 0) + 1;
+          categoryKey = HOLIDAY_TYPES.NATIONAL;
         }
-        
-        // 記錄具體假日類型
-        if (holiday.description) {
+        holidayTypes[categoryKey] = (holidayTypes[categoryKey] || 0) + 1;
+
+        // 記錄具體假日類型；描述與分類桶同名時（例如「補假」）不重複計
+        if (holiday.description && holiday.description !== categoryKey) {
           holidayTypes[holiday.description] = (holidayTypes[holiday.description] || 0) + 1;
         }
       } else if (holiday.description.includes('補行上班')) {
@@ -493,6 +620,7 @@ export class HolidayService {
       year,
       totalHolidays,
       nationalHolidays,
+      weekends,
       compensatoryDays,
       adjustedHolidays,
       workingDays,

@@ -19,7 +19,7 @@ import {
   DateParseError,
   type ParsedDate
 } from '../../src/utils/date-parser.js';
-import { DateFormat, ErrorType } from '../../src/types.js';
+import { DateFormat, ErrorType, getQueryableYearRange, getCurrentYearInTaipei } from '../../src/types.js';
 
 describe('Date Parser Utils', () => {
   describe('isLeapYear', () => {
@@ -68,15 +68,22 @@ describe('Date Parser Utils', () => {
       expect(() => validateYear(2026)).not.toThrow();
     });
 
+    test('應該接受上游可能已發布的未來年份', () => {
+      // 上限不再由套件版本決定，明年的資料不該被程式碼擋掉
+      expect(() => validateYear(getCurrentYearInTaipei() + 1)).not.toThrow();
+    });
+
     test('應該拒絕無效年份', () => {
-      expect(() => validateYear(2016)).toThrow(DateParseError);
-      expect(() => validateYear(2027)).toThrow(DateParseError);
+      const { start, end } = getQueryableYearRange();
+      expect(() => validateYear(start - 1)).toThrow(DateParseError);
+      expect(() => validateYear(end + 1)).toThrow(DateParseError);
       expect(() => validateYear(1999)).toThrow(DateParseError);
     });
 
     test('應該提供正確的錯誤訊息', () => {
+      expect.assertions(2);
       try {
-        validateYear(2030);
+        validateYear(getQueryableYearRange().end + 1);
       } catch (error) {
         expect(error).toBeInstanceOf(DateParseError);
         expect((error as DateParseError).type).toBe(ErrorType.INVALID_YEAR);

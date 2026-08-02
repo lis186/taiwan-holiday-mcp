@@ -1,6 +1,11 @@
 import { spawn } from 'child_process';
-import { promises as fs } from 'fs';
+import {promises as fs, readFileSync } from 'fs';
 import { join } from 'path';
+
+// 版本從 package.json 讀取，避免每次發版都要回來改測試裡寫死的字串
+const pkgVersion: string = JSON.parse(
+  readFileSync(join(process.cwd(), 'package.json'), 'utf8')
+).version;
 
 describe('Task 5.2: 建置與打包完整測試', () => {
   const projectRoot = process.cwd();
@@ -52,7 +57,7 @@ describe('Task 5.2: 建置與打包完整測試', () => {
       const result = await runCommand('node', [join(distPath, 'index.js'), '--version']);
       
       expect(result.exitCode).toBe(0);
-      expect(result.stderr).toContain('Taiwan Holiday MCP Server v1.0.5');
+      expect(result.stderr).toContain(`Taiwan Holiday MCP Server v${pkgVersion}`);
       expect(result.stderr).toContain('Node.js');
       expect(result.stderr).toContain('Platform:');
     });
@@ -94,7 +99,7 @@ describe('Task 5.2: 建置與打包完整測試', () => {
       
       expect(result.exitCode).toBe(0);
       // npm pack 的輸出會包含套件檔名
-      expect(result.stdout).toContain('taiwan-holiday-mcp-1.0.5.tgz');
+      expect(result.stdout).toContain(`taiwan-holiday-mcp-${pkgVersion}.tgz`);
       // 檢查建置過程是否成功
       expect(result.stdout).toContain('prepare');
       expect(result.stdout).toContain('build');

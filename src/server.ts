@@ -6,19 +6,35 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
   ListResourcesRequestSchema,
+  ListResourceTemplatesRequestSchema,
   ReadResourceRequestSchema,
   Tool,
   Resource,
+  ResourceTemplate,
   TextResourceContents,
 } from '@modelcontextprotocol/sdk/types.js';
 import { HolidayService, HolidayServiceError } from './holiday-service.js';
-import { ErrorType } from './types.js';
+import { ErrorType, getQueryableYearRange, getCurrentYearInTaipei } from './types.js';
 import { HealthMonitor, DefaultHealthChecks, HealthStatus } from './utils/health-monitor.js';
 import { GracefulShutdown, DefaultShutdownHandlers } from './utils/graceful-shutdown.js';
+/**
+ * 找不到注入版本時的預設值。
+ *
+ * 版本由進入點（src/index.ts）從 package.json 讀出後注入，server 類別本身
+ * 不做檔案 I/O —— 先前在此用 import.meta.url 讀檔，會讓以 CJS 轉譯的單元測試
+ * 整個套件無法載入。也不再於原始碼寫死版本（曾是 '1.0.2' 而 HealthMonitor
+ * 是 '1.0.0'，兩者都與 package.json 不同步）。
+ */
+const FALLBACK_VERSION = '0.0.0-dev';
+
+/**
+ * 資源清單裡列出最近幾年的 holidays / stats，避免把所有年份都塞進去
+ */
+const RECENT_YEARS_IN_RESOURCE_LIST = 3;
 
 /**
  * Taiwan Holiday MCP Server
- * 
+ *
  * 提供台灣假期查詢功能的 MCP 伺服器
  * 階段：完整功能 Cursor 驗證點
  */
@@ -28,11 +44,11 @@ export class TaiwanHolidayMcpServer {
   private healthMonitor: HealthMonitor;
   private gracefulShutdown?: GracefulShutdown;
 
-  constructor() {
+  constructor(version: string = FALLBACK_VERSION) {
     this.server = new Server(
       {
         name: 'taiwan-holiday-mcp',
-        version: '1.0.2',
+        version,
       },
       {
         capabilities: {
@@ -46,7 +62,7 @@ export class TaiwanHolidayMcpServer {
     this.holidayService = new HolidayService();
 
     // 初始化健康監控
-    this.healthMonitor = new HealthMonitor('1.0.2');
+    this.healthMonitor = new HealthMonitor(version);
     this.setupHealthChecks();
 
     // 初始化優雅關機（測試環境中跳過）
@@ -118,8 +134,8 @@ export class TaiwanHolidayMcpServer {
                 year: {
                   type: 'integer',
                   description: '要查詢的年份',
-                  minimum: 2017,
-                  maximum: 2026
+                  minimum: getQueryableYearRange().start,
+                  maximum: getQueryableYearRange().end
                 },
                 month: {
                   type: 'integer',
@@ -197,30 +213,8 @@ export class TaiwanHolidayMcpServer {
             description: '列出所有支援查詢的年份範圍',
             mimeType: 'application/json',
           } as Resource,
-          {
-            uri: 'taiwan-holidays://holidays/2024',
-            name: '2024年台灣假期',
-            description: '2024年完整的台灣假期資料',
-            mimeType: 'application/json',
-          } as Resource,
-          {
-            uri: 'taiwan-holidays://holidays/2025',
-            name: '2025年台灣假期',
-            description: '2025年完整的台灣假期資料',
-            mimeType: 'application/json',
-          } as Resource,
-          {
-            uri: 'taiwan-holidays://stats/2024',
-            name: '2024年假期統計',
-            description: '2024年台灣假期統計資訊',
-            mimeType: 'application/json',
-          } as Resource,
-          {
-            uri: 'taiwan-holidays://stats/2025',
-            name: '2025年假期統計',
-            description: '2025年台灣假期統計資訊',
-            mimeType: 'application/json',
-          } as Resource,
+          // 列出上游最近幾年，避免每年手動更新這份清單
+          ...this.getRecentYearResources(),
           {
             uri: 'taiwan-holidays://health',
             name: '系統健康狀態',
@@ -233,6 +227,28 @@ export class TaiwanHolidayMcpServer {
             description: '快速系統健康狀態檢查',
             mimeType: 'application/json',
           } as Resource,
+        ],
+      };
+    });
+
+    // 宣告 URI 樣板：資源清單只列最近幾年當入口建議，但實際上任何年份都可以嘗試。
+    // 有了樣板，client 不必受限於清單裡列出的年份，也就不需要為了「不漏列剛發布
+    // 的年度」而在 resources/list 上做網路探測。
+    this.server.setRequestHandler(ListResourceTemplatesRequestSchema, async () => {
+      return {
+        resourceTemplates: [
+          {
+            uriTemplate: 'taiwan-holidays://holidays/{year}',
+            name: '指定年份的台灣假期',
+            description: `任一年份的完整假期資料（${getQueryableYearRange().start} 起；實際可用年份見 taiwan-holidays://years）`,
+            mimeType: 'application/json',
+          } as ResourceTemplate,
+          {
+            uriTemplate: 'taiwan-holidays://stats/{year}',
+            name: '指定年份的假期統計',
+            description: `任一年份的假期統計（${getQueryableYearRange().start} 起；實際可用年份見 taiwan-holidays://years）`,
+            mimeType: 'application/json',
+          } as ResourceTemplate,
         ],
       };
     });
@@ -277,7 +293,7 @@ export class TaiwanHolidayMcpServer {
     
     switch (parsedUri.type) {
       case 'years':
-        return this.getYearsResource();
+        return await this.getYearsResource();
       
       case 'holidays':
         if (!parsedUri.year) {
@@ -315,22 +331,54 @@ export class TaiwanHolidayMcpServer {
     const [, type, yearStr] = match;
     const year = yearStr ? parseInt(yearStr, 10) : undefined;
     
-    if (year && (year < 2017 || year > 2026)) {
-      throw new Error(`不支援的年份: ${year}。支援範圍: 2017-2026`);
+    const { start: minYear, end: maxYear } = getQueryableYearRange();
+    if (year && (year < minYear || year > maxYear)) {
+      throw new Error(`不支援的年份: ${year}。可查詢範圍: ${minYear}-${maxYear}`);
     }
     
     return { type, year };
   }
 
   /**
+   * 產生最近幾年的 holidays / stats 資源項目。
+   *
+   * 刻意**不打網路**：`resources/list` 位於 MCP 握手後的第一個往返上，
+   * 原本是純同步、不可能失敗的。若在這裡做探測，離線或上游慢時會等到
+   * timeout 才失敗，client 可能判定 server 初始化異常。
+   *
+   * 年份由當前日期推算，所以會自動滾動、不會像寫死 2024/2025 那樣過期。
+   * 「任意年份皆可嘗試」由 `resources/templates/list` 宣告，
+   * 精確的可用年份由 `taiwan-holidays://years` 提供。
+   */
+  private getRecentYearResources(): Resource[] {
+    const currentYear = getCurrentYearInTaipei();
+    const recentYears = Array.from(
+      { length: RECENT_YEARS_IN_RESOURCE_LIST },
+      (_, i) => currentYear - (RECENT_YEARS_IN_RESOURCE_LIST - 1 - i)
+    );
+
+    return recentYears.flatMap((year) => [
+      {
+        uri: `taiwan-holidays://holidays/${year}`,
+        name: `${year}年台灣假期`,
+        description: `${year}年完整的台灣假期資料`,
+        mimeType: 'application/json',
+      } as Resource,
+      {
+        uri: `taiwan-holidays://stats/${year}`,
+        name: `${year}年假期統計`,
+        description: `${year}年台灣假期統計資訊`,
+        mimeType: 'application/json',
+      } as Resource,
+    ]);
+  }
+
+  /**
    * 獲取年份列表資源
    */
-  private getYearsResource() {
-    const years = [];
-    for (let year = 2017; year <= 2026; year++) {
-      years.push(year);
-    }
-    
+  private async getYearsResource() {
+    const years = await this.holidayService.getAvailableYears();
+
     return {
       contents: [
         {
