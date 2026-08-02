@@ -37,6 +37,8 @@ export interface HolidayStats {
   totalHolidays: number;
   /** 國定假日天數 */
   nationalHolidays: number;
+  /** 一般週末天數（上游 description 為空的放假日） */
+  weekends: number;
   /** 補假天數 */
   compensatoryDays: number;
   /** 調整放假天數 */
@@ -169,12 +171,62 @@ export interface MCPToolError {
 }
 
 /**
- * 支援的年份範圍常數
+ * 上游資料最早提供的年份（ruyut/TaiwanCalendar 從 2017 開始）
  */
-export const SUPPORTED_YEAR_RANGE: YearRange = {
-  start: 2017,
-  end: 2026
-};
+export const MIN_SUPPORTED_YEAR = 2017;
+
+/**
+ * 台北時區「現在」的年／月／日。
+ *
+ * 刻意回傳分量而非 Date：位移過的 Date 不是真實 instant，
+ * 呼叫端若用 `getFullYear()`（本地時區）讀取就會拿到錯的值。
+ * 回傳純數字讓誤用不可能發生。
+ *
+ * 台灣不實施日光節約時間，固定 UTC+8 即可。
+ * 這是全專案唯一計算台北時間的地方 —— 偏移量寫在兩處就會漂移。
+ */
+export function taipeiDateParts(now: number = Date.now()): {
+  year: number;
+  month: number;
+  day: number;
+} {
+  const shifted = new Date(now + 8 * 60 * 60 * 1000);
+  return {
+    year: shifted.getUTCFullYear(),
+    month: shifted.getUTCMonth() + 1,
+    day: shifted.getUTCDate(),
+  };
+}
+
+/**
+ * 取得台北時區的當前年份。
+ *
+ * 不能用 `new Date().getFullYear()` —— 那是主機時區。UTC 主機在台灣
+ * 跨年後的 8 小時內會回報前一年，導致「未來年度／歷史年度」判斷錯位。
+ */
+export function getCurrentYearInTaipei(): number {
+  return taipeiDateParts().year;
+}
+
+/**
+ * 合理性上限：避免荒謬的年份輸入白跑一趟網路請求。
+ *
+ * 這不是能力上限 —— 某年份能不能查，取決於上游有沒有那筆資料，
+ * 由實際抓取的結果決定，不由本套件的版本決定。
+ */
+export function getMaxQueryableYear(): number {
+  return getCurrentYearInTaipei() + 5;
+}
+
+/**
+ * 可查詢的年份範圍。
+ *
+ * JSON Schema、參數驗證、資源 URI 驗證共用這一個來源，
+ * 避免三處各自寫死而不同步。
+ */
+export function getQueryableYearRange(): YearRange {
+  return { start: MIN_SUPPORTED_YEAR, end: getMaxQueryableYear() };
+}
 
 /**
  * 預設日期格式
@@ -199,6 +251,7 @@ export const WEEK_MAPPING: Record<string, number> = {
  */
 export const HOLIDAY_TYPES = {
   NATIONAL: '國定假日',
+  WEEKEND: '週末',
   COMPENSATORY: '補假',
   ADJUSTED: '調整放假',
   WORKING: '補行上班',

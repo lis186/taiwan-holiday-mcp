@@ -16,12 +16,12 @@ import {
   ErrorType,
   ErrorDetail,
   MCPToolError,
-  SUPPORTED_YEAR_RANGE,
+  MIN_SUPPORTED_YEAR,
+  getQueryableYearRange,
   DEFAULT_DATE_FORMAT,
   WEEK_MAPPING,
   HOLIDAY_TYPES,
-  HolidayType
-} from '../../src/types';
+  HolidayType, getCurrentYearInTaipei } from '../../src/types';
 
 import {
   createMockHoliday,
@@ -74,6 +74,7 @@ describe('型別定義測試', () => {
         year: 2024,
         totalHolidays: 115,
         nationalHolidays: 12,
+        weekends: 92,
         compensatoryDays: 8,
         adjustedHolidays: 3,
         workingDays: 2,
@@ -117,8 +118,31 @@ describe('型別定義測試', () => {
       };
 
       expect(range.start).toBeLessThan(range.end);
-      expect(SUPPORTED_YEAR_RANGE.start).toBe(2017);
-      expect(SUPPORTED_YEAR_RANGE.end).toBe(2026);
+
+      // 下限固定（上游從 2017 開始）
+      const queryable = getQueryableYearRange();
+      expect(queryable.start).toBe(MIN_SUPPORTED_YEAR);
+      expect(queryable.start).toBe(2017);
+    });
+
+    // 上限跟著台北年份走。期望值不能用受測函式算出來（那是同義反覆，
+    // 兩邊同時錯也會通過）—— 改成固定時間點 + 絕對值斷言。
+    it('上限應以台北時區的跨年時刻為界', () => {
+      const cases: Array<[string, number]> = [
+        // UTC 12/31 16:00 = 台北 1/1 00:00
+        ['2026-12-31T15:59:59Z', 2026 + 5],
+        ['2026-12-31T16:00:00Z', 2027 + 5],
+        ['2027-06-15T00:00:00Z', 2027 + 5],
+      ];
+      for (const [iso, expected] of cases) {
+        jest.useFakeTimers().setSystemTime(new Date(iso));
+        try {
+          expect(getQueryableYearRange().end).toBe(expected);
+          expect(getCurrentYearInTaipei()).toBe(expected - 5);
+        } finally {
+          jest.useRealTimers();
+        }
+      }
     });
   });
 

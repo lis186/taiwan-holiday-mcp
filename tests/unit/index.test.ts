@@ -43,13 +43,18 @@ function runIndexScript(args: string[] = []): Promise<{stdout: string, stderr: s
   });
 }
 
+// 版本從 package.json 讀取，避免每次發版都要回來改測試裡寫死的字串
+const pkgVersion: string = JSON.parse(
+  readFileSync(join(process.cwd(), 'package.json'), 'utf8')
+).version;
+
 describe('Taiwan Holiday MCP Server Index Functions', () => {
   describe('版本資訊顯示', () => {
     test('應該顯示版本資訊', async () => {
       const result = await runIndexScript(['--version']);
       
       expect(result.exitCode).toBe(0);
-      expect(result.stderr).toContain('Taiwan Holiday MCP Server v1.0.5');
+      expect(result.stderr).toContain(`Taiwan Holiday MCP Server v${pkgVersion}`);
       expect(result.stderr).toContain('Node.js');
       expect(result.stderr).toContain('Platform:');
     });
@@ -58,7 +63,7 @@ describe('Taiwan Holiday MCP Server Index Functions', () => {
       const result = await runIndexScript(['-v']);
       
       expect(result.exitCode).toBe(0);
-      expect(result.stderr).toContain('Taiwan Holiday MCP Server v1.0.5');
+      expect(result.stderr).toContain(`Taiwan Holiday MCP Server v${pkgVersion}`);
     });
   });
 

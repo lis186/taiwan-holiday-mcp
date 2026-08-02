@@ -1,6 +1,6 @@
 {
   "name": "taiwan-holiday-mcp",
-  "version": "1.0.5",
+  "version": "2.0.0",
   "mcpName": "io.github.lis186/taiwan-holiday-mcp",
   "description": "MCP server for Taiwan holiday information",
   "license": "MIT",
@@ -33,7 +33,9 @@
     "prepare": "npm run build",
     "prepublishOnly": "npm run test && npm run build",
     "package:test": "npm pack --dry-run",
-    "package:local": "npm pack"
+    "package:local": "npm pack",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.test.json --noEmit",
+    "typecheck:tests": "tsc -p tsconfig.test.json --noEmit"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.13.0"

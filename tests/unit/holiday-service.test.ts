@@ -5,7 +5,7 @@
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { HolidayService, HolidayServiceError } from '../../src/holiday-service.js';
-import { Holiday, ErrorType } from '../../src/types.js';
+import { Holiday, ErrorType, getQueryableYearRange, HOLIDAY_TYPES, getCurrentYearInTaipei } from '../../src/types.js';
 
 // 載入測試資料
 const testHolidays: Holiday[] = JSON.parse(
@@ -94,14 +94,50 @@ describe('HolidayService', () => {
       expect(mockFetch).toHaveBeenCalledTimes(1); // 確認只發送了一次請求
     });
 
-    test('應該拒絕超出支援範圍的年份', async () => {
-      await expect(service.getHolidaysForYear(2016))
+    test('應該拒絕超出可查詢範圍的年份，且不浪費一次網路請求', async () => {
+      const { start, end } = getQueryableYearRange();
+
+      await expect(service.getHolidaysForYear(start - 1))
         .rejects.toThrow(HolidayServiceError);
-      
-      await expect(service.getHolidaysForYear(2027))
+
+      await expect(service.getHolidaysForYear(end + 1))
         .rejects.toThrow(HolidayServiceError);
-      
+
       expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    test('上游尚未發布該年度時應明確說明，且不重試', async () => {
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 404,
+        statusText: 'Not Found'
+      } as Response);
+
+      await expect(service.getHolidaysForYear(getCurrentYearInTaipei() + 1))
+        .rejects.toThrow('上游尚未發布');
+
+      // 不重試的來源是 fetchHolidaysFromCdn catch 開頭對 HolidayServiceError 的短路，
+      // 不是 ErrorClassifier（它把中文 404 訊息歸為 TEMPORARY，即「可重試」）。
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
+
+    // 已發布年度的 404 是上游資料異常，不該與「還沒公布」混為一談 ——
+    // 混在一起會讓呼叫端把資料遺失當成正常狀況而靜默跳過。
+    test('已發布年度的資料消失時應回報上游異常，而非「尚未發布」', async () => {
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 404,
+        statusText: 'Not Found'
+      } as Response);
+
+      const pastYear = getCurrentYearInTaipei() - 1;
+      await expect(service.getHolidaysForYear(pastYear)).rejects.toMatchObject({
+        message: expect.stringContaining('上游缺少'),
+        // API_ERROR（而非 INVALID_YEAR）才會被斷路器計入
+        type: ErrorType.API_ERROR,
+      });
+      // 404 是確定性答案，不該重試
+      expect(mockFetch).toHaveBeenCalledTimes(1);
     });
 
     test('應該處理 HTTP 錯誤', async () => {
@@ -323,11 +359,197 @@ describe('HolidayService', () => {
         .rejects.toThrow(HolidayServiceError);
     });
 
+    // 註：這條只驗存在性，永遠會通過。它是「全綠不等於正確」的實例 ——
+    // 下面兩條才真的能抓到計數錯誤。保留它以維持既有覆蓋。
     test('應該正確分類假期類型', async () => {
       const stats = await service.getHolidayStats(2024);
-      
+
       expect(stats.holidayTypes).toBeDefined();
       expect(Object.keys(stats.holidayTypes).length).toBeGreaterThan(0);
+    });
+
+    // holidayTypes 同時裝「分類桶」與「具體假日名」兩種語意。上游的 description
+    // 有時剛好等於分類桶名稱（補假、調整放假），曾經被兩邊各加一次而翻倍。
+    const collisionFixture: Holiday[] = [
+      { date: '20240127', week: '六', isHoliday: true, description: '補假' },
+      { date: '20240128', week: '日', isHoliday: true, description: '補假' },
+      { date: '20240203', week: '六', isHoliday: true, description: '調整放假' },
+      { date: '20240204', week: '日', isHoliday: true, description: '調整放假' },
+      { date: '20240205', week: '一', isHoliday: true, description: '調整放假' },
+      { date: '20240206', week: '二', isHoliday: true, description: '國定假日' },
+      { date: '20240207', week: '三', isHoliday: true, description: '春節調整放假' },
+      { date: '20240208', week: '四', isHoliday: true, description: '' },
+      { date: '20240215', week: '四', isHoliday: false, description: '補行上班' },
+    ];
+
+    test('description 與分類桶同名時不應重複計數', async () => {
+      mockFetch.mockResolvedValue({ ok: true, json: async () => collisionFixture });
+      service.clearCache();
+
+      const stats = await service.getHolidayStats(2024);
+
+      expect(stats.holidayTypes['補假']).toBe(2); // 舊碼: 4
+      expect(stats.holidayTypes['調整放假']).toBe(4); // 舊碼: 7
+      expect(stats.holidayTypes['國定假日']).toBe(1); // 舊碼: 3（含被誤算的週末）
+      expect(stats.holidayTypes['週末']).toBe(1); // 舊碼: 無此分類
+
+      // 包含但不等於桶名 → 仍應同時進兩個 key（證明沒有過度修正）
+      expect(stats.holidayTypes['春節調整放假']).toBe(1);
+      expect(stats.holidayTypes['補行上班']).toBe(1);
+    });
+
+    // 不變式測試：不枚舉 key，斷言結構。這種寫法在還不知道「調整放假」
+    // 也會碰撞時就能抓到它（2019 年補假筆數為 0，只錨定補假的測試抓不到）。
+    test('每個分類桶都應等於對應的頂層計數器', async () => {
+      mockFetch.mockResolvedValue({ ok: true, json: async () => collisionFixture });
+      service.clearCache();
+
+      const stats = await service.getHolidayStats(2024);
+
+      expect(stats.holidayTypes[HOLIDAY_TYPES.COMPENSATORY] ?? 0).toBe(stats.compensatoryDays);
+      expect(stats.holidayTypes[HOLIDAY_TYPES.ADJUSTED] ?? 0).toBe(stats.adjustedHolidays);
+      expect(stats.holidayTypes[HOLIDAY_TYPES.NATIONAL] ?? 0).toBe(stats.nationalHolidays);
+      expect(stats.holidayTypes[HOLIDAY_TYPES.WEEKEND] ?? 0).toBe(stats.weekends);
+      expect(stats.holidayTypes[HOLIDAY_TYPES.WORKING] ?? 0).toBe(stats.workingDays);
+
+      // 四個放假分類必須剛好切分所有放假日
+      expect(
+        stats.compensatoryDays + stats.adjustedHolidays + stats.nationalHolidays + stats.weekends
+      ).toBe(stats.totalHolidays);
+    });
+
+    // 週末的 description 是空字串，過去落入 else 分支被算成國定假日：
+    // 2026 年因此回報 114 個「國定假日」，實際具名的只有 16 個。
+    test('一般週末不應被算成具名國定假日', async () => {
+      mockFetch.mockResolvedValue({ ok: true, json: async () => collisionFixture });
+      service.clearCache();
+
+      const stats = await service.getHolidayStats(2024);
+
+      expect(stats.nationalHolidays).toBe(1); // 舊碼: 2（週末被算進來）
+      expect(stats.weekends).toBe(1); // 舊碼: 無此欄位
+    });
+  });
+
+  // 查詢未發布年度是完全正常的使用情境（例如年末規劃明年行程）。
+  // 若它被 Circuit Breaker 計為失敗，連續 5 次就會開啟斷路器 ——
+  // 之後連「有資料的有效年份」都會被拒絕，把使用者的正常操作變成服務中斷。
+  describe('Circuit Breaker 與未發布年度', () => {
+    test('查詢未發布年度不應累積斷路器失敗次數', async () => {
+      service.clearCache();
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 404,
+        statusText: 'Not Found'
+      } as Response);
+
+      const futureYear = getCurrentYearInTaipei() + 1;
+      const threshold = 5; // failureThreshold
+      for (let i = 0; i < threshold; i++) {
+        await expect(service.getHolidaysForYear(futureYear)).rejects.toThrow('上游尚未發布');
+        service.clearCache(); // 避免命中快取而沒真的走到抓取
+      }
+
+      expect(service.getCircuitBreakerStats().failureCount).toBe(0);
+    });
+
+    // 「未發布」與「已發布卻消失」必須分開：前者是正常使用情境（不計入斷路器），
+    // 後者代表上游壞了 —— 若也被當成預期錯誤，上游整批資料消失時斷路器不會開，
+    // 服務會持續對每個請求打一次注定失敗的網路。
+    test('歷史年度資料消失應計入斷路器失敗', async () => {
+      service.clearCache();
+      service.resetCircuitBreaker();
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 404,
+        statusText: 'Not Found'
+      } as Response);
+
+      const pastYear = getCurrentYearInTaipei() - 1;
+      await expect(service.getHolidaysForYear(pastYear)).rejects.toThrow('上游缺少');
+
+      expect(service.getCircuitBreakerStats().failureCount).toBeGreaterThan(0);
+    });
+
+    test('斷路器不該因未發布年度而拒絕有效年份', async () => {
+      service.clearCache();
+      const futureYear = getCurrentYearInTaipei() + 1;
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 404,
+        statusText: 'Not Found'
+      } as Response);
+      for (let i = 0; i < 5; i++) {
+        await expect(service.getHolidaysForYear(futureYear)).rejects.toThrow();
+        service.clearCache();
+      }
+
+      // 換成有效年份且上游正常回應 → 不該被斷路器擋下
+      mockFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => testHolidays
+      } as unknown as Response);
+
+      await expect(service.getHolidaysForYear(2024)).resolves.toBeDefined();
+    });
+  });
+
+  describe('getAvailableYears', () => {
+    const currentYear = getCurrentYearInTaipei();
+
+    test('探測到 404 應正常停止，回傳到最新可用年', async () => {
+      service.clearCache();
+      mockFetch
+        .mockResolvedValueOnce({ ok: true, status: 200 }) // 今年+1 存在
+        .mockResolvedValueOnce({ ok: false, status: 404 }); // 今年+2 不存在
+
+      const years = await service.getAvailableYears();
+
+      expect(years[0]).toBe(2017);
+      expect(years[years.length - 1]).toBe(currentYear + 1);
+    });
+
+    // 只有 404 代表「上游沒有」。網路故障若也被當成 404，
+    // 斷網時會安靜回報較短的範圍 —— 看起來完全正常的錯誤答案。
+    test('網路故障應拋出，而不是安靜回報較短的範圍', async () => {
+      service.clearCache();
+      mockFetch.mockRejectedValueOnce(new Error('ECONNRESET'));
+
+      await expect(service.getAvailableYears()).rejects.toThrow();
+    });
+
+    test('探測失敗不應污染快取', async () => {
+      service.clearCache();
+      mockFetch.mockRejectedValueOnce(new Error('ECONNRESET'));
+      await expect(service.getAvailableYears()).rejects.toThrow();
+
+      mockFetch
+        .mockResolvedValueOnce({ ok: true, status: 200 })
+        .mockResolvedValueOnce({ ok: false, status: 404 });
+
+      const years = await service.getAvailableYears();
+      expect(years[years.length - 1]).toBe(currentYear + 1);
+    });
+
+    // 只斷言「method 是 HEAD」這個可驗的事實。
+    // 不主張節省了多少位元組 —— 那需要實際量測，未做。
+    // 也註明：HEAD 不減少往返次數，探測與正式查詢仍是兩次請求。
+    test('探測應使用 HEAD，不下載內容', async () => {
+      service.clearCache();
+      mockFetch
+        .mockResolvedValueOnce({ ok: true, status: 200 })
+        .mockResolvedValueOnce({ ok: false, status: 404 });
+
+      await service.getAvailableYears();
+
+      const probeCalls = mockFetch.mock.calls.filter(([url]: [string]) =>
+        /\/\d{4}\.json$/.test(String(url))
+      );
+      expect(probeCalls.length).toBeGreaterThan(0);
+      probeCalls.forEach(([, init]: [string, RequestInit]) => {
+        expect(init?.method).toBe('HEAD'); // 舊碼: undefined（即 GET）
+      });
     });
   });
 

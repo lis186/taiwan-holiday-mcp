@@ -5,7 +5,7 @@
  */
 
 import { HolidayService, HolidayServiceError } from '../../src/holiday-service.js';
-import { Holiday, HolidayStats, ErrorType } from '../../src/types.js';
+import { Holiday, HolidayStats, ErrorType, getQueryableYearRange } from '../../src/types.js';
 
 // 網路可用性檢查
 async function isNetworkAvailable(): Promise<boolean> {
@@ -277,11 +277,16 @@ describe('HolidayService 整合測試', () => {
       }
     }, 30000);
 
+    // 用實際邊界而非寫死年份：2027 已落入可查範圍且上游有資料，
+    // 寫死它會讓這個測試測不到「年份被擋」，只是碰巧因為 setup.ts
+    // 把 global.fetch mock 成 jest.fn() 而失敗。
     test('應該正確處理無效年份', async () => {
-      await expect(service.getHolidaysForYear(2016))
+      const { start, end } = getQueryableYearRange();
+
+      await expect(service.getHolidaysForYear(start - 1))
         .rejects.toThrow(HolidayServiceError);
-      
-      await expect(service.getHolidaysForYear(2027))
+
+      await expect(service.getHolidaysForYear(end + 1))
         .rejects.toThrow(HolidayServiceError);
     });
 

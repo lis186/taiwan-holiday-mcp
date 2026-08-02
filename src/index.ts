@@ -166,7 +166,8 @@ async function main(): Promise<void> {
     }
 
     // 建立並啟動伺服器
-    const server = new TaiwanHolidayMcpServer();
+    const version = JSON.parse(readFileSync(packageJsonPath, 'utf8')).version;
+    const server = new TaiwanHolidayMcpServer(version);
     await server.run();
     
   } catch (error) {

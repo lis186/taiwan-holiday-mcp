@@ -522,7 +522,7 @@ describe('DefaultHealthChecks', () => {
         external: 0,
         arrayBuffers: 0,
         rss: 0,
-      });
+      }) as unknown as typeof process.memoryUsage;
 
       const check = DefaultHealthChecks.memoryUsage(99); // 設定很高的閾值
       const result = await check();
@@ -549,7 +549,7 @@ describe('DefaultHealthChecks', () => {
         external: 0,
         arrayBuffers: 0,
         rss: 0,
-      });
+      }) as unknown as typeof process.memoryUsage;
 
       const check = DefaultHealthChecks.memoryUsage(90);
       const result = await check();

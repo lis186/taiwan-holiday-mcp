@@ -6,7 +6,8 @@ import {
   ReadResourceRequestSchema 
 } from '@modelcontextprotocol/sdk/types.js';
 import { HolidayService, HolidayServiceError } from '../../src/holiday-service';
-import { ErrorType } from '../../src/types';
+import { ErrorType, getQueryableYearRange, getCurrentYearInTaipei } from '../../src/types';
+import { createMockHolidayStats } from '../utils/test-helpers';
 
 // Mock dependencies
 jest.mock('@modelcontextprotocol/sdk/server/index.js');
@@ -19,6 +20,7 @@ jest.mock('../../src/holiday-service', () => {
       getHolidaysInRange: jest.fn(),
       getHolidayStats: jest.fn(),
       getHolidaysForYear: jest.fn(),
+      getAvailableYears: jest.fn().mockResolvedValue([2025, 2026, 2027]),
       clearCache: jest.fn(),
     })),
   };
@@ -48,6 +50,7 @@ describe('TaiwanHolidayMcpServer', () => {
       getHolidaysInRange: jest.fn(),
       getHolidayStats: jest.fn(),
       getHolidaysForYear: jest.fn(),
+      getAvailableYears: jest.fn().mockResolvedValue([2025, 2026, 2027]),
       clearCache: jest.fn(),
     } as any;
 
@@ -78,7 +81,7 @@ describe('TaiwanHolidayMcpServer', () => {
       expect(Server).toHaveBeenCalledWith(
         {
           name: 'taiwan-holiday-mcp',
-          version: '1.0.2',
+          version: expect.any(String),
         },
         {
           capabilities: {
@@ -94,7 +97,7 @@ describe('TaiwanHolidayMcpServer', () => {
     });
 
     test('應該設定請求處理器', () => {
-      expect(mockServer.setRequestHandler).toHaveBeenCalledTimes(4);
+      expect(mockServer.setRequestHandler).toHaveBeenCalledTimes(5);
     });
 
     test('應該具有 run 方法', () => {
@@ -108,8 +111,8 @@ describe('TaiwanHolidayMcpServer', () => {
       const calls = mockServer.setRequestHandler.mock.calls;
       console.log('Mock calls:', calls.map(call => ({ schema: call[0], hasHandler: !!call[1] })));
       
-      expect(calls.length).toBe(4);
-      expect(mockServer.setRequestHandler).toHaveBeenCalledTimes(4);
+      expect(calls.length).toBe(5);
+      expect(mockServer.setRequestHandler).toHaveBeenCalledTimes(5);
       
       // 模擬工具列表回應
       const toolsResult = {
@@ -209,8 +212,8 @@ describe('TaiwanHolidayMcpServer', () => {
 
       const checkHolidayTool = toolsResult.tools.find((t: any) => t.name === 'check_holiday');
       
-      expect(checkHolidayTool.inputSchema.properties).toHaveProperty('date');
-      expect(checkHolidayTool.inputSchema.required).toContain('date');
+      expect(checkHolidayTool!.inputSchema.properties).toHaveProperty('date');
+      expect(checkHolidayTool!.inputSchema.required).toContain('date');
     });
   });
 
@@ -220,7 +223,7 @@ describe('TaiwanHolidayMcpServer', () => {
     beforeEach(() => {
       const calls = mockServer.setRequestHandler.mock.calls;
       const toolHandlerCall = calls.find(call => {
-        const schema = call[0];
+        const schema = call[0] as unknown as { method?: string };
         return schema && (schema.method === 'tools/call' || call[0] === CallToolRequestSchema);
       });
       toolHandler = toolHandlerCall?.[1];
@@ -324,11 +327,8 @@ describe('TaiwanHolidayMcpServer', () => {
     describe('get_holiday_stats 工具', () => {
       test('應該成功處理統計查詢', async () => {
         expect(toolHandler).toBeDefined();
-        const mockStats = {
-          totalHolidays: 115,
-          monthlyStats: {},
-          holidayTypes: {}
-        };
+        // 用完整的 typed factory，避免 as any 掩蓋欄位缺漏
+        const mockStats = createMockHolidayStats({ totalHolidays: 115 });
         
         mockHolidayService.getHolidayStats.mockResolvedValue(mockStats);
 
@@ -347,12 +347,8 @@ describe('TaiwanHolidayMcpServer', () => {
 
       test('應該處理月份參數', async () => {
         expect(toolHandler).toBeDefined();
-        const mockStats = {
-          totalHolidays: 10,
-          monthlyStats: {},
-          holidayTypes: {}
-        };
-        
+        const mockStats = createMockHolidayStats({ totalHolidays: 10 });
+
         mockHolidayService.getHolidayStats.mockResolvedValue(mockStats);
 
         await toolHandler({
@@ -397,20 +393,36 @@ describe('TaiwanHolidayMcpServer', () => {
     test('應該返回正確的資源列表', async () => {
       const calls = mockServer.setRequestHandler.mock.calls;
       const resourcesHandlerCall = calls.find(call => {
-        const schema = call[0];
+        const schema = call[0] as unknown as { method?: string };
         return schema && (schema.method === 'resources/list' || call[0] === ListResourcesRequestSchema);
       });
       
       expect(resourcesHandlerCall).toBeDefined();
       const resourcesHandler = resourcesHandlerCall![1];
       
-      const result = await resourcesHandler({} as any);
+      const result = (await resourcesHandler({} as any, {} as any)) as any;
       
-      expect(result.resources).toHaveLength(7); // Updated for health resources
-      expect(result.resources.map((r: any) => r.uri)).toContain('taiwan-holidays://years');
-      expect(result.resources.map((r: any) => r.uri)).toContain('taiwan-holidays://holidays/2024');
-      expect(result.resources.map((r: any) => r.uri)).toContain('taiwan-holidays://health');
-      expect(result.resources.map((r: any) => r.uri)).toContain('taiwan-holidays://health/quick');
+      const uris = result.resources.map((r: any) => r.uri);
+      const currentYear = getCurrentYearInTaipei();
+
+      // years + 最近 3 年各一組 holidays/stats + 2 個 health 資源
+      expect(result.resources).toHaveLength(9);
+      expect(uris).toContain('taiwan-holidays://years');
+      expect(uris).toContain('taiwan-holidays://health');
+      expect(uris).toContain('taiwan-holidays://health/quick');
+
+      // 年份由當前日期推算，會自動滾動（不寫死、也不打網路）
+      expect(uris).toContain(`taiwan-holidays://holidays/${currentYear}`);
+      expect(uris).toContain(`taiwan-holidays://stats/${currentYear}`);
+      expect(uris).toContain(`taiwan-holidays://holidays/${currentYear - 2}`);
+      expect(uris).not.toContain(`taiwan-holidays://holidays/${currentYear - 3}`);
+
+      // 握手路徑上不得做網路 I/O
+      expect(mockHolidayService.getAvailableYears).not.toHaveBeenCalled();
+
+      // holidays/* 與 stats/* 必須對稱
+      expect(uris.filter((u: string) => u.startsWith('taiwan-holidays://holidays/'))).toHaveLength(3);
+      expect(uris.filter((u: string) => u.startsWith('taiwan-holidays://stats/'))).toHaveLength(3);
     });
   });
 
@@ -420,7 +432,7 @@ describe('TaiwanHolidayMcpServer', () => {
     beforeEach(() => {
       const calls = mockServer.setRequestHandler.mock.calls;
       const resourceHandlerCall = calls.find(call => {
-        const schema = call[0];
+        const schema = call[0] as unknown as { method?: string };
         return schema && (schema.method === 'resources/read' || call[0] === ReadResourceRequestSchema);
       });
       resourceHandler = resourceHandlerCall?.[1];
@@ -434,7 +446,9 @@ describe('TaiwanHolidayMcpServer', () => {
 
       const data = JSON.parse(result.contents[0].text);
       expect(data.success).toBe(true);
-      expect(data.data.supportedYears).toEqual([2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026]);
+      // 年份清單來自探測結果，不再是寫死的迴圈
+      expect(data.data.supportedYears).toEqual([2025, 2026, 2027]);
+      expect(mockHolidayService.getAvailableYears).toHaveBeenCalled();
     });
 
     test('應該處理假期資源', async () => {
@@ -457,11 +471,7 @@ describe('TaiwanHolidayMcpServer', () => {
 
     test('應該處理統計資源', async () => {
       expect(resourceHandler).toBeDefined();
-      const mockStats = {
-        totalHolidays: 115,
-        monthlyStats: {},
-        holidayTypes: {}
-      };
+      const mockStats = createMockHolidayStats({ totalHolidays: 115 });
       
       mockHolidayService.getHolidayStats.mockResolvedValue(mockStats);
 
@@ -488,13 +498,15 @@ describe('TaiwanHolidayMcpServer', () => {
 
     test('應該處理不支援的年份', async () => {
       expect(resourceHandler).toBeDefined();
+      // 用超出合理性上限的年份；上限內的未來年份現在是合法查詢
+      const outOfRange = getQueryableYearRange().end + 1;
       const result = await resourceHandler({
-        params: { uri: 'taiwan-holidays://holidays/2030' }
+        params: { uri: `taiwan-holidays://holidays/${outOfRange}` }
       });
 
       const data = JSON.parse(result.contents[0].text);
       expect(data.success).toBe(false);
-      expect(data.error).toContain('不支援的年份: 2030');
+      expect(data.error).toContain(`不支援的年份: ${outOfRange}`);
     });
 
     test('應該處理缺少年份參數', async () => {
