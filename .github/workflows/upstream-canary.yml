@@ -1,0 +1,130 @@
+name: Upstream Canary
+
+# 年份支援是 runtime 探測的，新年度不需要改程式碼就會自動生效。
+# 這支排程要抓的是上游結構／內容悄悄變了、已發布年度倒退，以及通知新年度已發布。
+
+on:
+  schedule:
+    # 每月 8 號 04:17 UTC（刻意避開整點）
+    - cron: '17 4 8 * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+# 重疊執行會讓兩個 run 同時看到「尚未通知」而各開一個 issue。
+# 不取消進行中的 run —— 讓它跑完才不會留下半途的狀態。
+concurrency:
+  group: upstream-canary
+  cancel-in-progress: false
+
+env:
+  # 通知 issue 的專用 label。倒退偵測只認帶此 label 的 issue，
+  # 否則任何人開一個「上游已發布 9999 年度資料」就能污染基準。
+  #
+  # 只用 label、不用 --app/--author：實測 `gh issue list --app <不存在的名稱>`
+  # 與 `--author app/<不存在的名稱>` 都會被**靜默忽略**（回傳筆數與不過濾相同），
+  # 拿它們當安全過濾只是虛假保障。而 `--label <不存在>` 確實回 0 筆。
+  # label 本身即有權限保護：外部使用者無法為自己開的 issue 加 label。
+  ANNOUNCE_LABEL: upstream-year
+
+jobs:
+  canary:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Check upstream data
+        id: canary
+        shell: bash
+        run: |
+          # pipefail 是必要的：少了它，node 失敗會被 tee 的成功退出碼蓋掉
+          set -eo pipefail
+          node scripts/upstream-canary.mjs 2>&1 | tee canary.txt
+          echo "year=$(grep '^NEWEST_YEAR=' canary.txt | cut -d= -f2)" >> "$GITHUB_OUTPUT"
+
+      # 必須 always()：上游異常時最需要看這份輸出，而 set -e 會讓上一步在
+      # 寫入 summary 之前就中止。少了這步，最需要診斷的時候 summary 是空的。
+      - name: Publish canary output to run summary
+        if: always()
+        shell: bash
+        run: |
+          if [ -f canary.txt ]; then
+            cat canary.txt >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo '哨兵沒有產生任何輸出 —— 腳本可能在啟動前就失敗了。' >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      # 通知歷史只讀一次，供下面兩步共用 —— 過濾條件寫兩遍就會漂移。
+      - name: Read announcement history
+        id: history
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          YEAR: ${{ steps.canary.outputs.year }}
+        run: |
+          set -eo pipefail
+          # 確保 label 存在；--force 在已存在時更新而非失敗
+          gh label create "${ANNOUNCE_LABEL}" --force \
+            --description '上游年度發布通知（由 upstream-canary 自動建立）' --color 0e8a16
+
+          # gh 失敗必須讓整步失敗，不能被當成「沒有歷史紀錄」
+          titles=$(gh issue list --state all --limit 500 \
+            --label "${ANNOUNCE_LABEL}" \
+            --json title --jq '.[].title')
+
+          highest=$(printf '%s\n' "${titles}" \
+            | sed -n 's/^上游已發布 \([0-9]\{4\}\) 年度資料$/\1/p' \
+            | sort -n | tail -1)
+          echo "highest=${highest}" >> "$GITHUB_OUTPUT"
+
+          if printf '%s\n' "${titles}" | grep -Fxq "上游已發布 ${YEAR} 年度資料"; then
+            echo "announced=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "announced=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # 已通知過的年度就是「曾經可用」的紀錄。用它偵測範圍倒退：
+      # 上游若把已發布的年度刪掉，探測只會安靜地回報較短的範圍，
+      # 對 canary 而言 404 是正常終點 —— 少了這一步就抓不到。
+      - name: Detect a regression in the available range
+        shell: bash
+        env:
+          YEAR: ${{ steps.canary.outputs.year }}
+          HIGHEST: ${{ steps.history.outputs.highest }}
+        run: |
+          set -eo pipefail
+          if [ -z "${HIGHEST}" ]; then
+            echo "尚無任何年度通知紀錄，跳過倒退檢查。"
+            exit 0
+          fi
+          echo "曾通知過的最新年度：${HIGHEST}；本次探測到：${YEAR}"
+          if [ "${YEAR}" -lt "${HIGHEST}" ]; then
+            echo "::error::可用年份倒退：曾發布至 ${HIGHEST}，現在只探測到 ${YEAR}。上游可能刪除了已發布的年度資料。"
+            exit 1
+          fi
+
+      - name: Announce a newly published year
+        if: steps.history.outputs.announced == 'false'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          YEAR: ${{ steps.canary.outputs.year }}
+        run: |
+          set -eo pipefail
+          gh issue create \
+            --title "上游已發布 ${YEAR} 年度資料" \
+            --label "${ANNOUNCE_LABEL}" \
+            --body "上游 ruyut/TaiwanCalendar 已提供 ${YEAR} 年度資料，哨兵驗證通過。
+
+          本套件的年份支援由 runtime 探測決定，因此不需要改程式碼即可查詢 ${YEAR} 年。
+          此 issue 僅作為通知，可直接關閉 —— 關閉後仍會作為「曾發布」的紀錄，
+          用於偵測上游年份範圍倒退。請勿修改標題或移除 ${ANNOUNCE_LABEL} label。"
