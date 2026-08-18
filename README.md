@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/lis186-taiwan-holiday-mcp-badge.png)](https://mseep.ai/app/lis186-taiwan-holiday-mcp)
+
 # Taiwan Holiday MCP Server
 
 [![Node.js Version](https://img.shields.io/node/v/taiwan-holiday-mcp.svg)](https://nodejs.org/)
