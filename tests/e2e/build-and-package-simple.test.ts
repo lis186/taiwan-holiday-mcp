@@ -1,6 +1,7 @@
 import { spawn } from 'child_process';
 import {promises as fs, readFileSync } from 'fs';
 import { join } from 'path';
+import { parseNpmPackJson } from './npm-pack.js';
 
 // 版本從 package.json 讀取，避免每次發版都要回來改測試裡寫死的字串
 const pkgVersion: string = JSON.parse(
@@ -95,15 +96,20 @@ describe('Task 5.2: 建置與打包完整測試', () => {
 
   describe('套件打包測試', () => {
     test('應該能夠成功打包', async () => {
-      const result = await runCommand('npm', ['run', 'package:test']);
-      
+      // --json 的檔案清單在 npm publish 巢狀執行時仍然存在；lifecycle 日誌則沒有
+      const result = await runCommand('npm', ['pack', '--dry-run', '--json']);
+
       expect(result.exitCode).toBe(0);
-      // npm pack 的輸出會包含套件檔名
-      expect(result.stdout).toContain(`taiwan-holiday-mcp-${pkgVersion}.tgz`);
-      // 檢查建置過程是否成功
-      expect(result.stdout).toContain('prepare');
-      expect(result.stdout).toContain('build');
-    }, 40000); // Jest 測試 timeout，npm pack + build 需要較長時間
+      const packed = parseNpmPackJson(result.stdout);
+      expect(packed.filename).toBe(`taiwan-holiday-mcp-${pkgVersion}.tgz`);
+      expect(packed.files).toEqual(expect.arrayContaining([
+        'package.json',
+        'README.md',
+        'LICENSE',
+        'dist/index.js',
+        'dist/index.d.ts',
+      ]));
+    }, 40000);
   });
 });
 
