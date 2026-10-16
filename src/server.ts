@@ -91,7 +91,7 @@ export class TaiwanHolidayMcpServer {
         tools: [
           {
             name: 'check_holiday',
-            description: '檢查指定日期是否為台灣假期',
+            description: '檢查指定日期是否為台灣假期。補假也視為假期（isHoliday 為 true），可由 description 是否含「補假」二字辨認。',
             inputSchema: {
               type: 'object',
               properties: {
@@ -107,7 +107,7 @@ export class TaiwanHolidayMcpServer {
           } as Tool,
           {
             name: 'get_holidays_in_range',
-            description: '獲取指定日期範圍內的所有台灣假期',
+            description: '獲取指定日期範圍內的所有台灣假期。結果包含補假（節日逢週末而多放的一天，也算放假）；補假與具名節日的分辨方式是 description 欄位含「補假」二字（例如「國慶日補假」或「補假」），沒有另外的旗標欄位。',
             inputSchema: {
               type: 'object',
               properties: {
@@ -151,7 +151,7 @@ export class TaiwanHolidayMcpServer {
           } as Tool,
           {
             name: 'get_next_holidays',
-            description: '取得指定日期之後的接下來 N 個台灣假期。未指定日期時以台北時區的今天為起算日（不含當天）。可略過一般週末，只保留具名假日。補班日不是假期，不會出現在結果裡。結果含 searchedThrough 與 truncatedByData；搜尋被上游最後一個已發布年度截斷時 truncatedByData 為 true。起算日晚於已發布資料時不會回「查無假期」。',
+            description: '取得指定日期之後的接下來 N 個台灣假期。未指定日期時以台北時區的今天為起算日（不含當天）。可略過一般週末，只保留具名假日。補班日不是假期，不會出現在結果裡。結果包含補假（節日逢週末而多放的一天，也算放假）；補假與具名節日的分辨方式是 description 欄位含「補假」二字（例如「國慶日補假」或「補假」），沒有另外的旗標欄位。若只要具名節日，請自行排除 description 含「補假」的項目。結果含 searchedThrough 與 truncatedByData；搜尋被上游最後一個已發布年度截斷時 truncatedByData 為 true。起算日晚於已發布資料時不會回「查無假期」。',
             inputSchema: {
               type: 'object',
               properties: {
