@@ -234,6 +234,8 @@ The next N Taiwan holidays after a start date. This matches `holiday next` in [`
 - `count` (integer, optional): how many to return. Default `1`, maximum `366`
 - `skip_weekends` (boolean, optional): skip ordinary weekends (Saturday or Sunday whose description is empty or `週末`). Named holidays that fall on a weekend are kept. Default `false`
 
+> Results include makeup days off (補假, e.g. 2026-10-26), which are real days off. Identify them by `description` containing `補假`; there is no separate flag field.
+
 **Returns:**
 ```json
 {
