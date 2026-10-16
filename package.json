@@ -2,7 +2,7 @@
   "name": "taiwan-holiday-mcp",
   "version": "2.1.0",
   "mcpName": "io.github.lis186/taiwan-holiday-mcp",
-  "description": "MCP server for Taiwan holiday information",
+  "description": "MCP server for Taiwan holidays and make-up workdays",
   "license": "MIT",
   "author": "Justin Lee",
   "homepage": "https://github.com/lis186/taiwan-holiday-mcp",
@@ -63,7 +63,9 @@
     "mcp",
     "model-context-protocol",
     "taiwan",
+    "taiwan-holidays",
     "holiday",
+    "make-up-workdays",
     "calendar",
     "claude",
     "cursor"
