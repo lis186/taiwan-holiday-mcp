@@ -236,6 +236,8 @@ npm start
     "found": true,
     "count": 2,
     "fromDate": "2026-01-01",
+    "searchedThrough": "2026-12-31",
+    "truncatedByData": false,
     "holidays": [
       { "date": "2026-01-03", "week": "六", "description": "週末" },
       { "date": "2026-01-04", "week": "日", "description": "週末" }
@@ -245,7 +247,9 @@ npm start
 }
 ```
 
-找不到時 `found` 為 `false`、`holidays` 為 `[]`，並帶 `message: "查無假期"`。一般週末的空說明會顯示為「週末」。補班日不是假期，不會出現在這份清單。
+`searchedThrough` 是這次實際搜到的最後一天。`truncatedByData` 為 `true` 時，365 天視窗被上游最後一個已發布年度截斷，回傳筆數少於 `count` 不代表後面沒有假期。
+
+找不到、而且搜尋窗裡真的沒有假期時，`found` 為 `false`、`holidays` 為 `[]`，並帶 `message: "查無假期"`。起算日晚於已發布資料時，訊息改為 `上游最新資料只到 N 年`。一般週末的空說明會顯示為「週末」。補班日不是假期，不會出現在這份清單。
 
 #### `get_workdays`
 
@@ -301,7 +305,7 @@ npm start
 }
 ```
 
-`totalDays` 在整月查詢是該月的日曆天數（閏年二月為 29），不是上游資料筆數。
+`totalDays` 在整月查詢是該月的日曆天數（閏年二月為 29）。上游該範圍的筆數必須剛好等於日曆天數；少一天或多一天都會回錯誤（例如 `上游 2024 年 2 月 資料不完整（預期 29 筆，實得 2 筆）`），不會把缺的日子當成工作天。
 
 ### MCP 資源
 

@@ -102,6 +102,16 @@ export interface NextHolidaysResult {
   count: number;
   /** 起算日（不含當日），YYYY-MM-DD */
   fromDate: string;
+  /**
+   * 這次實際搜尋到的最後一天（YYYY-MM-DD）。
+   * 是 365 天視窗與上游最後一個已發布年度 12/31 較早的那天。
+   */
+  searchedThrough: string;
+  /**
+   * 365 天視窗超出上游已發布資料，搜尋被截到最後一個已發布年度。
+   * 回傳筆數少於要求的 N 時，不代表後面沒有假期。
+   */
+  truncatedByData: boolean;
   holidays: NextHolidayItem[];
   /** 找不到時的說明 */
   message?: string;

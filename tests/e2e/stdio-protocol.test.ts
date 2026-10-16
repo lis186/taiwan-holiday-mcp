@@ -35,7 +35,7 @@ function isJsonRpcMessage(value: unknown): value is JsonRpcMessage {
 }
 
 describe('stdio JSON-RPC 協定衛生', () => {
-  test('initialize、tools/list、check_holiday 的 stdout 全部是 JSON-RPC', async () => {
+  test('initialize、tools/list、tools/call 的 stdout 全部是 JSON-RPC', async () => {
     const env: NodeJS.ProcessEnv = { ...process.env, NODE_ENV: 'production', DEBUG: 'true' };
     delete env.JEST_WORKER_ID;
 
@@ -137,24 +137,26 @@ describe('stdio JSON-RPC 協定衛生', () => {
         'get_workdays',
       ]));
 
-      const holidayPromise = waitForId(3, 30000);
+      // count: 0 在進網路前就失敗，離線 CI 也能檢查 tools/call 的 JSON-RPC。
+      const holidayPromise = waitForId(3, 10000);
       send({
         jsonrpc: '2.0',
         id: 3,
         method: 'tools/call',
         params: {
-          name: 'check_holiday',
-          arguments: { date: '2024-01-01' },
+          name: 'get_next_holidays',
+          arguments: { count: 0 },
         },
       });
       const holiday = await holidayPromise;
       expect(holiday.result).toEqual(expect.objectContaining({
+        isError: true,
         content: expect.any(Array),
       }));
       const body = JSON.parse((holiday.result as { content: Array<{ text: string }> }).content[0].text);
-      expect(body.tool).toBe('check_holiday');
-      expect(body.success).toBe(true);
-      expect(body.data.isHoliday).toBe(true);
+      expect(body.tool).toBe('get_next_holidays');
+      expect(body.success).toBe(false);
+      expect(body.error).toContain('count');
 
       child.kill('SIGTERM');
       const exitCode = await new Promise<number | null>((resolve, reject) => {

@@ -151,7 +151,7 @@ export class TaiwanHolidayMcpServer {
           } as Tool,
           {
             name: 'get_next_holidays',
-            description: '取得指定日期之後的接下來 N 個台灣假期。未指定日期時以台北時區的今天為起算日（不含當天）。可略過一般週末，只保留具名假日。補班日不是假期，不會出現在結果裡。',
+            description: '取得指定日期之後的接下來 N 個台灣假期。未指定日期時以台北時區的今天為起算日（不含當天）。可略過一般週末，只保留具名假日。補班日不是假期，不會出現在結果裡。結果含 searchedThrough 與 truncatedByData；搜尋被上游最後一個已發布年度截斷時 truncatedByData 為 true。起算日晚於已發布資料時不會回「查無假期」。',
             inputSchema: {
               type: 'object',
               properties: {
@@ -178,7 +178,7 @@ export class TaiwanHolidayMcpServer {
           } as Tool,
           {
             name: 'get_workdays',
-            description: '計算工作天數。指定 year 與 month 可查整月；指定 start_date 與 end_date 可查區間（含起迄日）。週末與假期不計入工作天，補班日（補行上班）計入工作天並另外列出。兩種查法請擇一，不要同時指定。',
+            description: '計算工作天數。指定 year 與 month 可查整月；指定 start_date 與 end_date 可查區間（含起迄日）。週末與假期不計入工作天，補班日（補行上班）計入工作天並另外列出。上游筆數與日曆天數不符時回報錯誤，不會把缺日當成工作天。兩種查法請擇一，不要同時指定。',
             inputSchema: {
               type: 'object',
               properties: {

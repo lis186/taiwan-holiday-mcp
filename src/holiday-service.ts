@@ -434,7 +434,7 @@ export class HolidayService {
     try {
       const from = options.fromDate ? parseDate(options.fromDate) : getTodayInTaipei();
       const fromIso = formatDate(from, 'YYYY-MM-DD');
-      const empty = (message: string): NextHolidaysResult => ({
+      const empty = (message: string): Omit<NextHolidaysResult, 'searchedThrough' | 'truncatedByData'> => ({
         found: false,
         count: 0,
         fromDate: fromIso,
@@ -444,16 +444,30 @@ export class HolidayService {
 
       const availableYears = await this.getAvailableYears();
       if (availableYears.length === 0) {
-        return empty('查無假期');
+        return {
+          ...empty('查無假期'),
+          searchedThrough: fromIso,
+          truncatedByData: false,
+        };
       }
 
       const maxYear = availableYears[availableYears.length - 1];
       const cap = parseDate(`${maxYear}1231`);
       const horizon = addDays(from, NEXT_HOLIDAY_SEARCH_DAYS);
-      const end = compareDates(horizon, cap) > 0 ? cap : horizon;
+      const truncatedByData = compareDates(horizon, cap) > 0;
+      const end = truncatedByData ? cap : horizon;
+      const searchedThrough = formatDate(end, 'YYYY-MM-DD');
 
       if (compareDates(end, from) <= 0) {
-        return empty('查無假期');
+        // 起算日已經晚於最後一個已發布年度。回「查無假期」會讓人以為那天之後沒有放假。
+        const message = from.year > maxYear
+          ? `上游最新資料只到 ${maxYear} 年`
+          : '查無假期';
+        return {
+          ...empty(message),
+          searchedThrough,
+          truncatedByData,
+        };
       }
 
       const holidays = await this.getHolidaysInRange(
@@ -475,19 +489,27 @@ export class HolidayService {
         }
       }
 
-      if (selected.length === 0) {
-        return empty('查無假期');
+      const items = selected.map((holiday) => ({
+        date: toIsoDate(holiday.date),
+        week: holiday.week,
+        description: holiday.description || '週末',
+      }));
+
+      if (items.length === 0) {
+        return {
+          ...empty('查無假期'),
+          searchedThrough,
+          truncatedByData,
+        };
       }
 
       return {
         found: true,
-        count: selected.length,
+        count: items.length,
         fromDate: fromIso,
-        holidays: selected.map((holiday) => ({
-          date: toIsoDate(holiday.date),
-          week: holiday.week,
-          description: holiday.description || '週末',
-        })),
+        searchedThrough,
+        truncatedByData,
+        holidays: items,
       };
     } catch (error) {
       rethrowDateParseError(error);
@@ -509,11 +531,13 @@ export class HolidayService {
     const holidays = await this.getHolidaysForYear(year);
     const monthStr = month.toString().padStart(2, '0');
     const inMonth = holidays.filter((holiday) => holiday.date.substring(4, 6) === monthStr);
+    const expected = getDaysInMonth(year, month);
+    this.assertCompleteDayCount(`${year} 年 ${month} 月`, expected, inMonth.length);
 
     return {
       year,
       month,
-      ...this.calculateWorkdays(getDaysInMonth(year, month), inMonth),
+      ...this.calculateWorkdays(expected, inMonth),
     };
   }
 
@@ -534,10 +558,14 @@ export class HolidayService {
       }
 
       const inRange = await this.getHolidaysInRange(startDate, endDate);
+      const startIso = formatDate(start, 'YYYY-MM-DD');
+      const endIso = formatDate(end, 'YYYY-MM-DD');
+      const expected = inclusiveDaysBetween(start, end);
+      this.assertCompleteDayCount(`${startIso} 至 ${endIso}`, expected, inRange.length);
       return {
-        startDate: formatDate(start, 'YYYY-MM-DD'),
-        endDate: formatDate(end, 'YYYY-MM-DD'),
-        ...this.calculateWorkdays(inclusiveDaysBetween(start, end), inRange),
+        startDate: startIso,
+        endDate: endIso,
+        ...this.calculateWorkdays(expected, inRange),
       };
     } catch (error) {
       rethrowDateParseError(error);
@@ -751,6 +779,19 @@ export class HolidayService {
     const endNum = end.year * 10000 + end.month * 100 + end.day;
     
     return dateNum >= startNum && dateNum <= endNum;
+  }
+
+  /**
+   * 上游若缺日，把缺的日子當成工作天會得到看起來正常的錯答案。
+   * 筆數必須剛好等於日曆天數。
+   */
+  private assertCompleteDayCount(scope: string, expected: number, actual: number): void {
+    if (actual !== expected) {
+      throw new HolidayServiceError(
+        `上游 ${scope} 資料不完整（預期 ${expected} 筆，實得 ${actual} 筆）`,
+        ErrorType.API_ERROR
+      );
+    }
   }
 
   /**
