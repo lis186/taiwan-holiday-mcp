@@ -45,8 +45,8 @@ async function execCommand(command: string, args: string[] = [], cwd?: string): 
 
 describe('套件安裝測試', () => {
   test('應支援 npm pack 打包', async () => {
-    // 執行 npm pack
-    const result = await execCommand('npm', ['pack']);
+    // publish --dry-run 會把 npm_config_dry_run 傳進子行程，預設不寫出 tarball
+    const result = await execCommand('npm', ['pack', '--dry-run=false']);
     expect(result.code).toBe(0);
     expect(result.stdout).toContain('.tgz');
     
@@ -69,8 +69,8 @@ describe('套件安裝測試', () => {
         private: true
       }, null, 2));
 
-      // 建立 npm pack
-      const packResult = await execCommand('npm', ['pack']);
+      // 建立 npm pack。--dry-run=false 避免繼承外層 npm publish --dry-run
+      const packResult = await execCommand('npm', ['pack', '--dry-run=false']);
       expect(packResult.code).toBe(0);
       
       const files = await fs.readdir('.');
@@ -84,7 +84,7 @@ describe('套件安裝測試', () => {
         await fs.copyFile(tgzPath, tempTgzPath);
 
         // 在臨時目錄中安裝
-        const installResult = await execCommand('npm', ['install', tgzFile], tempDir);
+        const installResult = await execCommand('npm', ['install', '--dry-run=false', tgzFile], tempDir);
         expect(installResult.code).toBe(0);
 
         // 檢查是否正確安裝
