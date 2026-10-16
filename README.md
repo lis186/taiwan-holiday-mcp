@@ -1,3 +1,5 @@
+[English](README.en.md) | [繁體中文](README.md)
+
 # Taiwan Holiday MCP Server
 
 [![Node.js Version](https://img.shields.io/node/v/taiwan-holiday-mcp.svg)](https://nodejs.org/)
@@ -403,14 +405,16 @@ npm run dev
 npm run test:coverage
 ```
 
-目前測試覆蓋率：**92.27%**（446 個測試案例，100% 通過）
+目前測試覆蓋率：**93.84%** statements（509 個測試通過，另有 8 個因環境略過）
 
-**核心模組覆蓋率**：
+**核心模組覆蓋率**（statements）：
 - SmartCache: 98.97% ✅
 - HealthMonitor: 98.78% ✅
-- DateParser: 97.77% ✅
+- DateParser: 98.97% ✅
 - CircuitBreaker: 100% ✅
-- GracefulShutdown: 88.34% ✅
+- GracefulShutdown: 89.42% ✅
+
+變異測試為選用，不在 CI。執行 `npm run test:mutation`（Stryker），目前分數 **98.51%**。
 
 ## 📊 效能指標
 
@@ -418,8 +422,8 @@ npm run test:coverage
 - **快取 API 呼叫**：< 100ms
 - **併發處理**：支援 10+ 併發請求
 - **記憶體使用**：< 50MB
-- **測試穩定性**：100% 通過率，企業級品質標準
-- **程式碼覆蓋率**：92.34%（遠超業界 80% 標準）
+- **測試穩定性**：509 個測試通過（另有 8 個因環境略過）
+- **程式碼覆蓋率**：93.84% statements（遠超業界 80% 標準）
 
 ## 🤝 貢獻指南
 
