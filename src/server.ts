@@ -17,6 +17,7 @@ import { HolidayService, HolidayServiceError } from './holiday-service.js';
 import { ErrorType, getQueryableYearRange, getCurrentYearInTaipei } from './types.js';
 import { HealthMonitor, DefaultHealthChecks, HealthStatus } from './utils/health-monitor.js';
 import { GracefulShutdown, DefaultShutdownHandlers } from './utils/graceful-shutdown.js';
+import { logToStderr } from './utils/protocol-logging.js';
 /**
  * 找不到注入版本時的預設值。
  *
@@ -69,7 +70,7 @@ export class TaiwanHolidayMcpServer {
     if (process.env.NODE_ENV !== 'test' && process.env.JEST_WORKER_ID === undefined) {
       this.gracefulShutdown = new GracefulShutdown({
         timeout: 10000, // 10 秒超時
-        logger: (message) => console.log(message),
+        logger: logToStderr,
         delay: 1000, // 1 秒延遲
       });
       this.setupShutdownHandlers();
@@ -148,6 +149,65 @@ export class TaiwanHolidayMcpServer {
               additionalProperties: false,
             },
           } as Tool,
+          {
+            name: 'get_next_holidays',
+            description: '取得指定日期之後的接下來 N 個台灣假期。未指定日期時以台北時區的今天為起算日（不含當天）。可略過一般週末，只保留具名假日。補班日不是假期，不會出現在結果裡。',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                date: {
+                  type: 'string',
+                  description: '起算日（不含當天）。支援 YYYY-MM-DD 或 YYYYMMDD。省略時為台北時區的今天',
+                  pattern: '^(\\d{4}-\\d{2}-\\d{2}|\\d{8})$'
+                },
+                count: {
+                  type: 'integer',
+                  description: '要取得的假期數量，預設 1，最大 366',
+                  minimum: 1,
+                  maximum: 366,
+                  default: 1
+                },
+                skip_weekends: {
+                  type: 'boolean',
+                  description: '略過一般週末（週六日且沒有具名假日），只回傳國定假日、補假等特殊假期。預設 false',
+                  default: false
+                }
+              },
+              additionalProperties: false,
+            },
+          } as Tool,
+          {
+            name: 'get_workdays',
+            description: '計算工作天數。指定 year 與 month 可查整月；指定 start_date 與 end_date 可查區間（含起迄日）。週末與假期不計入工作天，補班日（補行上班）計入工作天並另外列出。兩種查法請擇一，不要同時指定。',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                year: {
+                  type: 'integer',
+                  description: '月份查詢的年份。須與 month 一起使用',
+                  minimum: getQueryableYearRange().start,
+                  maximum: getQueryableYearRange().end
+                },
+                month: {
+                  type: 'integer',
+                  description: '月份查詢的月份 (1-12)。須與 year 一起使用',
+                  minimum: 1,
+                  maximum: 12
+                },
+                start_date: {
+                  type: 'string',
+                  description: '區間起日（含當天）。支援 YYYY-MM-DD 或 YYYYMMDD。須與 end_date 一起使用',
+                  pattern: '^(\\d{4}-\\d{2}-\\d{2}|\\d{8})$'
+                },
+                end_date: {
+                  type: 'string',
+                  description: '區間迄日（含當天）。支援 YYYY-MM-DD 或 YYYYMMDD。須與 start_date 一起使用',
+                  pattern: '^(\\d{4}-\\d{2}-\\d{2}|\\d{8})$'
+                }
+              },
+              additionalProperties: false,
+            },
+          } as Tool,
         ],
       };
     });
@@ -166,6 +226,12 @@ export class TaiwanHolidayMcpServer {
 
           case 'get_holiday_stats':
             return await this.handleGetHolidayStats(args);
+
+          case 'get_next_holidays':
+            return await this.handleGetNextHolidays(args);
+
+          case 'get_workdays':
+            return await this.handleGetWorkdays(args);
 
           default:
             throw new Error(`未知的工具: ${name}`);
@@ -635,6 +701,102 @@ export class TaiwanHolidayMcpServer {
             },
             timestamp: new Date().toISOString(),
             tool: 'get_holiday_stats'
+          }, null, 2),
+        },
+      ],
+    };
+  }
+
+  /**
+   * 處理接下來 N 個假期
+   */
+  private async handleGetNextHolidays(args: Record<string, unknown> | undefined) {
+    const input = args ?? {};
+    const count = input.count;
+    const date = input.date;
+    const skipWeekends = input.skip_weekends;
+
+    if (count !== undefined && (typeof count !== 'number' || !Number.isInteger(count))) {
+      throw new Error('count 必須是 1 到 366 的整數');
+    }
+    if (date !== undefined && typeof date !== 'string') {
+      throw new Error('date 必須是字串');
+    }
+    if (skipWeekends !== undefined && typeof skipWeekends !== 'boolean') {
+      throw new Error('skip_weekends 必須是布林值');
+    }
+
+    const result = await this.holidayService.getNextHolidays({
+      count: count as number | undefined,
+      fromDate: date as string | undefined,
+      skipWeekends: skipWeekends === true,
+    });
+
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify({
+            success: true,
+            data: result,
+            timestamp: new Date().toISOString(),
+            tool: 'get_next_holidays'
+          }, null, 2),
+        },
+      ],
+    };
+  }
+
+  /**
+   * 處理工作天查詢（整月或日期區間，二擇一）
+   */
+  private async handleGetWorkdays(args: Record<string, unknown> | undefined) {
+    const input = args ?? {};
+    const { year, month, start_date, end_date } = input;
+
+    const hasMonthQuery = year !== undefined || month !== undefined;
+    const hasRangeQuery = start_date !== undefined || end_date !== undefined;
+
+    if (hasMonthQuery && hasRangeQuery) {
+      throw new Error('請只指定 year 與 month，或 start_date 與 end_date，不要同時指定');
+    }
+    if (!hasMonthQuery && !hasRangeQuery) {
+      throw new Error('請指定 year 與 month，或 start_date 與 end_date');
+    }
+
+    if (hasMonthQuery) {
+      if (typeof year !== 'number' || !Number.isInteger(year)) {
+        throw new Error('缺少必要參數：year');
+      }
+      if (typeof month !== 'number' || !Number.isInteger(month)) {
+        throw new Error('缺少必要參數：month');
+      }
+
+      const stats = await this.holidayService.getWorkdaysStats(year, month);
+      return this.workdaysToolResult(stats);
+    }
+
+    if (typeof start_date !== 'string' || start_date.length === 0) {
+      throw new Error('缺少必要參數：start_date');
+    }
+    if (typeof end_date !== 'string' || end_date.length === 0) {
+      throw new Error('缺少必要參數：end_date');
+    }
+
+    const stats = await this.holidayService.getWorkdaysBetween(start_date, end_date);
+    return this.workdaysToolResult(stats);
+  }
+
+  private workdaysToolResult(data: unknown) {
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify({
+            success: true,
+            data,
+            timestamp: new Date().toISOString(),
+            tool: 'get_workdays'
           }, null, 2),
         },
       ],

@@ -164,12 +164,16 @@ describe('建置與打包完整測試', () => {
       const response = JSON.parse(result.stdout.trim());
       expect(response.jsonrpc).toBe('2.0');
       expect(response.id).toBe(1);
-      expect(response.result.tools).toHaveLength(3);
+      expect(response.result.tools).toHaveLength(5);
       
       const toolNames = response.result.tools.map((tool: any) => tool.name);
-      expect(toolNames).toContain('check_holiday');
-      expect(toolNames).toContain('get_holidays_in_range');
-      expect(toolNames).toContain('get_holiday_stats');
+      expect(toolNames).toEqual([
+        'check_holiday',
+        'get_holidays_in_range',
+        'get_holiday_stats',
+        'get_next_holidays',
+        'get_workdays',
+      ]);
     });
 
     test('應該正確處理假期查詢', async () => {

@@ -6,6 +6,7 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 import { HolidayService, HolidayServiceError } from '../../src/holiday-service.js';
 import { Holiday, ErrorType, getQueryableYearRange, HOLIDAY_TYPES, getCurrentYearInTaipei } from '../../src/types.js';
+import { formatDate, getDaysInMonth, getTodayInTaipei } from '../../src/utils/date-parser.js';
 
 // 載入測試資料
 const testHolidays: Holiday[] = JSON.parse(
@@ -704,6 +705,221 @@ describe('HolidayService', () => {
 
       await expect(service.getHolidaysForYear(2024))
         .rejects.toThrow(HolidayServiceError);
+    });
+  });
+
+  describe('getNextHolidays 與 getWorkdays', () => {
+    const WEEK = ['日', '一', '二', '三', '四', '五', '六'];
+
+    function calendar(year: number, month: number, overrides: Record<string, Partial<Holiday>> = {}): Holiday[] {
+      const days = getDaysInMonth(year, month);
+      const rows: Holiday[] = [];
+      for (let day = 1; day <= days; day++) {
+        const dow = new Date(Date.UTC(year, month - 1, day)).getUTCDay();
+        const date = `${year}${String(month).padStart(2, '0')}${String(day).padStart(2, '0')}`;
+        const weekend = dow === 0 || dow === 6;
+        rows.push({
+          date,
+          week: WEEK[dow],
+          isHoliday: weekend,
+          description: '',
+          ...overrides[date],
+        });
+      }
+      return rows;
+    }
+
+    const january = calendar(2024, 1, {
+      '20240101': { isHoliday: true, description: '開國紀念日' },
+      '20240106': { isHoliday: false, description: '補行上班' },
+      '20240110': { isHoliday: true, description: '自訂假日' },
+      '20240113': { isHoliday: true, description: '春節' },
+    });
+
+    function mockCalendar(data: Holiday[]): void {
+      mockFetch.mockImplementation(async (url: string) => {
+        if (String(url).endsWith('/2024.json')) {
+          return { ok: true, status: 200, json: async () => data };
+        }
+        return { ok: false, status: 404, statusText: 'Not Found' };
+      });
+    }
+
+    test('下一個假期不含起算日，空說明顯示為週末', async () => {
+      mockCalendar(january);
+
+      const result = await service.getNextHolidays({ fromDate: '2024-01-01', count: 4 });
+
+      expect(result.found).toBe(true);
+      expect(result.fromDate).toBe('2024-01-01');
+      expect(result.count).toBe(4);
+      expect(result.holidays.map((holiday) => holiday.date)).toEqual([
+        '2024-01-07',
+        '2024-01-10',
+        '2024-01-13',
+        '2024-01-14',
+      ]);
+      expect(result.holidays[0]).toEqual({ date: '2024-01-07', week: '日', description: '週末' });
+      expect(result.holidays[1].description).toBe('自訂假日');
+      expect(result.holidays[2].description).toBe('春節');
+      expect(result.holidays.some((holiday) => holiday.date === '2024-01-01')).toBe(false);
+      expect(result.holidays.some((holiday) => holiday.date === '2024-01-06')).toBe(false);
+    });
+
+    test('skipWeekends 略過一般週末但保留週六的具名假日', async () => {
+      mockCalendar(january);
+
+      const result = await service.getNextHolidays({
+        fromDate: '20240101',
+        count: 2,
+        skipWeekends: true,
+      });
+
+      expect(result.holidays.map((holiday) => holiday.date)).toEqual([
+        '2024-01-10',
+        '2024-01-13',
+      ]);
+    });
+
+    test('未指定日期時以台北今天為起算日', async () => {
+      mockFetch.mockImplementation(async () => ({
+        ok: true,
+        status: 200,
+        json: async () => [],
+      }));
+
+      const result = await service.getNextHolidays();
+      const today = getTodayInTaipei();
+
+      expect(result.fromDate).toBe(formatDate(today, 'YYYY-MM-DD'));
+      expect(result.found).toBe(false);
+      expect(result.count).toBe(0);
+      expect(result.holidays).toEqual([]);
+      expect(result.message).toBe('查無假期');
+    });
+
+    test('起算日已是上游最後一天時不再往後抓資料', async () => {
+      mockFetch.mockImplementation(async () => ({
+        ok: false,
+        status: 404,
+        statusText: 'Not Found',
+      }));
+
+      const year = getCurrentYearInTaipei();
+      const result = await service.getNextHolidays({ fromDate: `${year}-12-31`, count: 3 });
+
+      expect(result.found).toBe(false);
+      expect(result.fromDate).toBe(`${year}-12-31`);
+      const gets = mockFetch.mock.calls.filter((call) => call[1]?.method !== 'HEAD');
+      expect(gets).toHaveLength(0);
+    });
+
+    test('說明為「週末」的週六日也視為一般週末', async () => {
+      mockCalendar(calendar(2024, 1, {
+        '20240106': { isHoliday: true, description: '週末' },
+        '20240110': { isHoliday: true, description: '自訂假日' },
+      }));
+
+      const result = await service.getNextHolidays({
+        fromDate: '2024-01-01',
+        count: 1,
+        skipWeekends: true,
+      });
+
+      expect(result.holidays.map((holiday) => holiday.date)).toEqual(['2024-01-10']);
+    });
+
+    test('上游沒有任何年份時回查無假期', async () => {
+      jest.spyOn(service, 'getAvailableYears').mockResolvedValue([]);
+
+      const result = await service.getNextHolidays({ fromDate: '2024-01-01', count: 1 });
+
+      expect(result).toMatchObject({ found: false, count: 0, message: '查無假期' });
+    });
+
+    test('無效起算日回報日期解析錯誤', async () => {
+      await expect(service.getNextHolidays({ fromDate: '2024-02-31' }))
+        .rejects.toThrow('日期解析錯誤');
+      await expect(service.getWorkdaysBetween('not-a-date', '2024-01-02'))
+        .rejects.toThrow('日期解析錯誤');
+    });
+
+    test('count 超出範圍時拒絕，且不打網路', async () => {
+      await expect(service.getNextHolidays({ count: 0 })).rejects.toThrow('count 必須是 1 到 366');
+      await expect(service.getNextHolidays({ count: 367 })).rejects.toThrow(HolidayServiceError);
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    test('整月工作天把補班日算成工作天而不是假期', async () => {
+      mockCalendar(january);
+
+      const stats = await service.getWorkdaysStats(2024, 1);
+
+      // 1 月 31 天。週末 8 天，其中 1/6 改為補班；再加上 1/1、1/10 兩個平日假期。
+      // 假期 = 7 個剩餘週末 + 2 個平日假期 = 9。工作天 = 31 - 9 = 22，其中含補班日。
+      expect(stats).toMatchObject({
+        year: 2024,
+        month: 1,
+        totalDays: 31,
+        holidays: 9,
+        workdays: 22,
+        makeupWorkdays: 1,
+      });
+      expect(stats.makeupWorkdayDates).toEqual([
+        { date: '2024-01-06', week: '六', description: '補行上班' },
+      ]);
+      expect(stats.workdays).toBe(stats.totalDays - stats.holidays);
+    });
+
+    test('月份總天數以日曆為準，資料缺筆的日子視為工作天', async () => {
+      mockCalendar([
+        { date: '20240201', week: '四', isHoliday: true, description: '測試假' },
+        { date: '20240217', week: '六', isHoliday: false, description: '補行上班' },
+      ]);
+
+      const stats = await service.getWorkdaysStats(2024, 2);
+
+      expect(stats.totalDays).toBe(29);
+      expect(stats.holidays).toBe(1);
+      expect(stats.makeupWorkdays).toBe(1);
+      expect(stats.workdays).toBe(28);
+    });
+
+    test('區間工作天含起迄日，補班日計入工作天', async () => {
+      mockCalendar(january);
+
+      const stats = await service.getWorkdaysBetween('2024-01-06', '2024-01-07');
+
+      expect(stats).toMatchObject({
+        startDate: '2024-01-06',
+        endDate: '2024-01-07',
+        totalDays: 2,
+        holidays: 1,
+        workdays: 1,
+        makeupWorkdays: 1,
+      });
+    });
+
+    test('單日補班的工作天數為 1', async () => {
+      mockCalendar(january);
+
+      const stats = await service.getWorkdaysBetween('20240106', '20240106');
+
+      expect(stats.totalDays).toBe(1);
+      expect(stats.workdays).toBe(1);
+      expect(stats.holidays).toBe(0);
+      expect(stats.makeupWorkdays).toBe(1);
+      expect(stats.startDate).toBe('2024-01-06');
+    });
+
+    test('開始日晚於結束日時拒絕', async () => {
+      await expect(service.getWorkdaysBetween('2024-01-08', '2024-01-01'))
+        .rejects.toThrow('不能晚於結束日期');
+    });
+
+    test('無效月份拒絕', async () => {
+      await expect(service.getWorkdaysStats(2024, 0)).rejects.toThrow(HolidayServiceError);
+      await expect(service.getWorkdaysStats(2024, 13)).rejects.toThrow('無效的月份');
     });
   });
 }); 

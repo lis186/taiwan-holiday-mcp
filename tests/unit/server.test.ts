@@ -2,6 +2,7 @@ import { TaiwanHolidayMcpServer } from '../../src/server';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { 
   CallToolRequestSchema,
+  ListToolsRequestSchema,
   ListResourcesRequestSchema,
   ReadResourceRequestSchema 
 } from '@modelcontextprotocol/sdk/types.js';
@@ -21,6 +22,9 @@ jest.mock('../../src/holiday-service', () => {
       getHolidayStats: jest.fn(),
       getHolidaysForYear: jest.fn(),
       getAvailableYears: jest.fn().mockResolvedValue([2025, 2026, 2027]),
+      getNextHolidays: jest.fn(),
+      getWorkdaysStats: jest.fn(),
+      getWorkdaysBetween: jest.fn(),
       clearCache: jest.fn(),
     })),
   };
@@ -51,6 +55,9 @@ describe('TaiwanHolidayMcpServer', () => {
       getHolidayStats: jest.fn(),
       getHolidaysForYear: jest.fn(),
       getAvailableYears: jest.fn().mockResolvedValue([2025, 2026, 2027]),
+      getNextHolidays: jest.fn(),
+      getWorkdaysStats: jest.fn(),
+      getWorkdaysBetween: jest.fn(),
       clearCache: jest.fn(),
     } as any;
 
@@ -186,6 +193,34 @@ describe('TaiwanHolidayMcpServer', () => {
         'get_holidays_in_range',
         'get_holiday_stats'
       ]);
+    });
+
+    test('實際工具列表應保留既有工具並加入新工具', async () => {
+      const calls = mockServer.setRequestHandler.mock.calls;
+      const listCall = calls.find((call) => call[0] === ListToolsRequestSchema);
+      expect(listCall).toBeDefined();
+
+      const result = await listCall![1]({} as any, {} as any) as { tools: Array<{ name: string; inputSchema: any }> };
+      const names = result.tools.map((tool) => tool.name);
+
+      expect(names).toEqual([
+        'check_holiday',
+        'get_holidays_in_range',
+        'get_holiday_stats',
+        'get_next_holidays',
+        'get_workdays',
+      ]);
+
+      const byName = Object.fromEntries(
+        result.tools.map((tool) => [tool.name, tool])
+      );
+      expect(byName.check_holiday.inputSchema.required).toEqual(['date']);
+      expect(byName.get_holidays_in_range.inputSchema.required).toEqual(['start_date', 'end_date']);
+      expect(byName.get_holiday_stats.inputSchema.required).toEqual(['year']);
+      expect(byName.get_next_holidays.inputSchema.properties).toHaveProperty('count');
+      expect(byName.get_next_holidays.inputSchema.properties).toHaveProperty('skip_weekends');
+      expect(byName.get_workdays.inputSchema.properties).toHaveProperty('month');
+      expect(byName.get_workdays.inputSchema.properties).toHaveProperty('start_date');
     });
 
     test('工具應該有正確的 schema', async () => {
@@ -372,6 +407,191 @@ describe('TaiwanHolidayMcpServer', () => {
 
         expect(result.isError).toBe(true);
         expect(result.content[0].text).toContain('缺少必要參數：year');
+      });
+    });
+
+    describe('get_next_holidays 工具', () => {
+      test('應該把參數轉給假期服務並保留 CLI 欄位', async () => {
+        expect(toolHandler).toBeDefined();
+        mockHolidayService.getNextHolidays.mockResolvedValue({
+          found: true,
+          count: 1,
+          fromDate: '2024-01-01',
+          holidays: [{ date: '2024-01-07', week: '日', description: '週末' }],
+        });
+
+        const result = await toolHandler({
+          params: {
+            name: 'get_next_holidays',
+            arguments: { date: '2024-01-01', count: 1, skip_weekends: true }
+          }
+        });
+
+        expect(mockHolidayService.getNextHolidays).toHaveBeenCalledWith({
+          fromDate: '2024-01-01',
+          count: 1,
+          skipWeekends: true,
+        });
+        const data = JSON.parse(result.content[0].text);
+        expect(data.success).toBe(true);
+        expect(data.tool).toBe('get_next_holidays');
+        expect(data.data.holidays[0].description).toBe('週末');
+      });
+
+      test('省略參數時應交給服務使用預設值', async () => {
+        mockHolidayService.getNextHolidays.mockResolvedValue({
+          found: false,
+          count: 0,
+          fromDate: '2026-10-16',
+          holidays: [],
+          message: '查無假期',
+        });
+
+        await toolHandler({
+          params: { name: 'get_next_holidays', arguments: {} }
+        });
+
+        expect(mockHolidayService.getNextHolidays).toHaveBeenCalledWith({
+          fromDate: undefined,
+          count: undefined,
+          skipWeekends: false,
+        });
+      });
+
+      test('應該拒絕非整數 count', async () => {
+        const result = await toolHandler({
+          params: {
+            name: 'get_next_holidays',
+            arguments: { count: 1.5 }
+          }
+        });
+
+        expect(result.isError).toBe(true);
+        expect(result.content[0].text).toContain('count 必須是 1 到 366 的整數');
+      });
+
+      test('應該拒絕型別錯誤的 date 與 skip_weekends', async () => {
+        const badDate = await toolHandler({
+          params: { name: 'get_next_holidays', arguments: { date: 20240101 } }
+        });
+        expect(badDate.isError).toBe(true);
+        expect(badDate.content[0].text).toContain('date 必須是字串');
+
+        const badFlag = await toolHandler({
+          params: { name: 'get_next_holidays', arguments: { skip_weekends: 'yes' } }
+        });
+        expect(badFlag.isError).toBe(true);
+        expect(badFlag.content[0].text).toContain('skip_weekends 必須是布林值');
+      });
+    });
+
+    describe('get_workdays 工具', () => {
+      test('應該查詢整月工作天', async () => {
+        mockHolidayService.getWorkdaysStats.mockResolvedValue({
+          year: 2024,
+          month: 1,
+          totalDays: 31,
+          workdays: 23,
+          holidays: 8,
+          makeupWorkdays: 1,
+          makeupWorkdayDates: [
+            { date: '2024-01-06', week: '六', description: '補行上班' }
+          ],
+        });
+
+        const result = await toolHandler({
+          params: {
+            name: 'get_workdays',
+            arguments: { year: 2024, month: 1 }
+          }
+        });
+
+        expect(mockHolidayService.getWorkdaysStats).toHaveBeenCalledWith(2024, 1);
+        const data = JSON.parse(result.content[0].text);
+        expect(data.success).toBe(true);
+        expect(data.tool).toBe('get_workdays');
+        expect(data.data.makeupWorkdays).toBe(1);
+        expect(data.data.workdays).toBe(23);
+      });
+
+      test('應該查詢日期區間工作天', async () => {
+        mockHolidayService.getWorkdaysBetween.mockResolvedValue({
+          startDate: '2024-01-06',
+          endDate: '2024-01-07',
+          totalDays: 2,
+          workdays: 1,
+          holidays: 1,
+          makeupWorkdays: 1,
+          makeupWorkdayDates: [
+            { date: '2024-01-06', week: '六', description: '補行上班' }
+          ],
+        });
+
+        const result = await toolHandler({
+          params: {
+            name: 'get_workdays',
+            arguments: { start_date: '2024-01-06', end_date: '2024-01-07' }
+          }
+        });
+
+        expect(mockHolidayService.getWorkdaysBetween).toHaveBeenCalledWith('2024-01-06', '2024-01-07');
+        const data = JSON.parse(result.content[0].text);
+        expect(data.data.startDate).toBe('2024-01-06');
+        expect(data.data.makeupWorkdays).toBe(1);
+      });
+
+      test('缺少查詢條件時應該回報錯誤', async () => {
+        const result = await toolHandler({
+          params: { name: 'get_workdays', arguments: {} }
+        });
+
+        expect(result.isError).toBe(true);
+        expect(result.content[0].text).toContain('請指定 year 與 month');
+      });
+
+      test('同時指定月份與區間時應該回報錯誤', async () => {
+        const result = await toolHandler({
+          params: {
+            name: 'get_workdays',
+            arguments: {
+              year: 2024,
+              month: 1,
+              start_date: '2024-01-01',
+              end_date: '2024-01-31',
+            }
+          }
+        });
+
+        expect(result.isError).toBe(true);
+        expect(result.content[0].text).toContain('不要同時指定');
+        expect(mockHolidayService.getWorkdaysStats).not.toHaveBeenCalled();
+        expect(mockHolidayService.getWorkdaysBetween).not.toHaveBeenCalled();
+      });
+
+      test('區間只給起日時應該回報缺少 end_date', async () => {
+        const result = await toolHandler({
+          params: {
+            name: 'get_workdays',
+            arguments: { start_date: '2024-01-01' }
+          }
+        });
+
+        expect(result.isError).toBe(true);
+        expect(result.content[0].text).toContain('缺少必要參數：end_date');
+      });
+
+      test('只有月份或只有迄日時應該回報缺少的另一半', async () => {
+        const missingYear = await toolHandler({
+          params: { name: 'get_workdays', arguments: { month: 1 } }
+        });
+        expect(missingYear.isError).toBe(true);
+        expect(missingYear.content[0].text).toContain('缺少必要參數：year');
+
+        const missingStart = await toolHandler({
+          params: { name: 'get_workdays', arguments: { end_date: '2024-01-31' } }
+        });
+        expect(missingStart.isError).toBe(true);
+        expect(missingStart.content[0].text).toContain('缺少必要參數：start_date');
       });
     });
 
