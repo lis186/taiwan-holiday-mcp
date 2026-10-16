@@ -22,6 +22,9 @@ export default {
     '/dist/',
     '/build/'
   ],
+  modulePathIgnorePatterns: [
+    '<rootDir>/.stryker-tmp/',
+  ],
 
   // 模組檔案副檔名
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json'],

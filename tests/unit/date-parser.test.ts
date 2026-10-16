@@ -16,6 +16,8 @@ import {
   getTodayInTaipei,
   compareDates,
   daysBetween,
+  inclusiveDaysBetween,
+  addDays,
   DateParseError,
   type ParsedDate
 } from '../../src/utils/date-parser.js';
@@ -343,6 +345,32 @@ describe('Date Parser Utils', () => {
       const start = parseDate('20231225');
       const end = parseDate('20240105');
       expect(daysBetween(start, end)).toBe(11);
+    });
+  });
+
+  describe('inclusiveDaysBetween', () => {
+    test('同一天算 1 天，區間含起迄日', () => {
+      const day = parseDate('20240101');
+      expect(inclusiveDaysBetween(day, day)).toBe(1);
+      expect(inclusiveDaysBetween(parseDate('20240101'), parseDate('20240131'))).toBe(31);
+    });
+
+    test('跨月與閏年以日曆日計算', () => {
+      expect(inclusiveDaysBetween(parseDate('20240228'), parseDate('20240301'))).toBe(3);
+      expect(inclusiveDaysBetween(parseDate('20230228'), parseDate('20230301'))).toBe(2);
+    });
+  });
+
+  describe('addDays', () => {
+    test('應該跨過閏日與月份', () => {
+      expect(addDays(parseDate('20240228'), 1).normalized).toBe('20240229');
+      expect(addDays(parseDate('20240228'), 2).normalized).toBe('20240301');
+      expect(addDays(parseDate('20230228'), 1).normalized).toBe('20230301');
+    });
+
+    test('加 365 天在閏年落在同年 12/31', () => {
+      expect(addDays(parseDate('20240101'), 365).normalized).toBe('20241231');
+      expect(addDays(parseDate('20250101'), 365).normalized).toBe('20260101');
     });
   });
 

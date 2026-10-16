@@ -273,7 +273,7 @@ export function compareDates(date1: ParsedDate, date2: ParsedDate): number {
 }
 
 /**
- * 計算兩個日期之間的天數差
+ * 計算兩個日期之間的天數差（不含結束日當天的「間隔」：同一天為 0）
  */
 export function daysBetween(startDate: ParsedDate, endDate: ParsedDate): number {
   const start = new Date(startDate.year, startDate.month - 1, startDate.day);
@@ -281,4 +281,36 @@ export function daysBetween(startDate: ParsedDate, endDate: ParsedDate): number 
   
   const diffTime = end.getTime() - start.getTime();
   return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+}
+
+/**
+ * 計算兩個日期之間的天數，包含起始與結束日。
+ *
+ * 與 taiwan-holiday-cli 的 daysBetween 相同：同一天為 1。
+ * 用 UTC 日曆日計算，避免主機時區的日光節約時間把天數算錯。
+ */
+export function inclusiveDaysBetween(startDate: ParsedDate, endDate: ParsedDate): number {
+  const start = Date.UTC(startDate.year, startDate.month - 1, startDate.day);
+  const end = Date.UTC(endDate.year, endDate.month - 1, endDate.day);
+  return Math.round((end - start) / 86_400_000) + 1;
+}
+
+/**
+ * 以日曆日加減天數，回傳新的解析結果。
+ * 用 UTC 計算，跨月、閏年與主機時區都不會偏移。
+ */
+export function addDays(date: ParsedDate, days: number): ParsedDate {
+  const shifted = new Date(Date.UTC(date.year, date.month - 1, date.day + days));
+  const year = shifted.getUTCFullYear();
+  const month = shifted.getUTCMonth() + 1;
+  const day = shifted.getUTCDate();
+  const normalized = `${year}${month.toString().padStart(2, '0')}${day.toString().padStart(2, '0')}`;
+
+  return {
+    year,
+    month,
+    day,
+    original: normalized,
+    normalized,
+  };
 } 

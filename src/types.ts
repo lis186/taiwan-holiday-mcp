@@ -28,6 +28,96 @@ export interface Holiday {
 }
 
 /**
+ * 補班日（補行上班）明細。
+ * 日期使用 YYYY-MM-DD，與 taiwan-holiday-cli 的 JSON 輸出一致。
+ */
+export interface MakeupWorkday {
+  /** 日期，YYYY-MM-DD */
+  date: string;
+  /** 星期幾，中文表示 */
+  week: string;
+  /** 上游說明，含「補行上班」 */
+  description: string;
+}
+
+/**
+ * 工作天統計。
+ *
+ * 語意對齊 taiwan-holiday-cli 的 `holiday workdays` / `holiday between`：
+ * - `holidays` 含週末與國定假日（isHoliday === true）
+ * - `workdays = totalDays - holidays`
+ * - 補班日（description 含「補行上班」）本來就不是假期，已計入 workdays，
+ *   `makeupWorkdays` 只是另外點名，不會再加一次
+ */
+export interface WorkdaysStats {
+  /** 總天數（月份為該月天數；區間含起迄日） */
+  totalDays: number;
+  /** 工作天數 */
+  workdays: number;
+  /** 假期天數（含週末） */
+  holidays: number;
+  /** 補班天數 */
+  makeupWorkdays: number;
+  /** 補班日明細，筆數等於 makeupWorkdays */
+  makeupWorkdayDates: MakeupWorkday[];
+}
+
+/**
+ * 單月工作天統計（對應 CLI `workdays` 的 JSON 欄位）
+ */
+export interface WorkdaysMonthResult extends WorkdaysStats {
+  year: number;
+  month: number;
+}
+
+/**
+ * 日期區間工作天統計（對應 CLI `between` 的 JSON 欄位）
+ */
+export interface WorkdaysRangeResult extends WorkdaysStats {
+  /** 開始日期，YYYY-MM-DD */
+  startDate: string;
+  /** 結束日期，YYYY-MM-DD */
+  endDate: string;
+}
+
+/**
+ * 下一個假期的一筆結果（對應 CLI `next` JSON 的 holidays[] 元素）
+ */
+export interface NextHolidayItem {
+  /** 日期，YYYY-MM-DD */
+  date: string;
+  /** 星期幾，中文表示 */
+  week: string;
+  /** 假日說明；上游留空的一般週末為「週末」 */
+  description: string;
+}
+
+/**
+ * 接下來 N 個假期（對應 CLI `next` 多筆 JSON）
+ */
+export interface NextHolidaysResult {
+  /** 是否找到至少一個假期 */
+  found: boolean;
+  /** 實際回傳的假期數（不一定等於要求的 N） */
+  count: number;
+  /** 起算日（不含當日），YYYY-MM-DD */
+  fromDate: string;
+  /**
+   * 這次實際搜尋到的最後一天（YYYY-MM-DD）。
+   * 是 365 天視窗與上游最後一個已發布年度 12/31 較早的那天。
+   */
+  searchedThrough: string;
+  /**
+   * 365 天視窗超出上游已發布資料，搜尋被截到最後一個已發布年度。
+   * 回傳筆數少於要求的 N 時，不代表後面沒有假期。
+   */
+  truncatedByData: boolean;
+  holidays: NextHolidayItem[];
+  /** 找不到時的說明 */
+  message?: string;
+}
+
+/**
  * 假日統計資料介面
  */
 export interface HolidayStats {

@@ -10,7 +10,7 @@
 ## ✨ 特色功能
 
 - 🇹🇼 **準確的台灣假期資料**：基於 [TaiwanCalendar](https://github.com/ruyut/TaiwanCalendar) 提供的政府公告假期資訊
-- 🚀 **即時查詢**：支援單日查詢、範圍查詢和統計查詢
+- 🚀 **即時查詢**：支援單日查詢、範圍查詢、接下來的假期、工作天（含補班日）與統計查詢
 - 📅 **多種日期格式**：支援 `YYYY-MM-DD` 和 `YYYYMMDD` 格式
 - 🔄 **智慧快取**：自動快取資料，提升查詢效能
 - 🛠️ **MCP 標準**：完全相容 Model Context Protocol 規範
@@ -218,6 +218,94 @@ npm start
   }
 }
 ```
+
+#### `get_next_holidays`
+
+取得起算日之後的接下來 N 個台灣假期。語意對齊 [`taiwan-holiday-cli`](https://github.com/lis186/taiwan-holiday-cli) 的 `holiday next`：起算日當天即使放假也不算，搜尋範圍是起算日後 365 天（且不超過上游已發布的最後一年）。
+
+**參數：**
+- `date` (string, 可選): 起算日，`YYYY-MM-DD` 或 `YYYYMMDD`。省略時為台北時區的今天
+- `count` (integer, 可選): 要取得的數量，預設 `1`，最大 `366`
+- `skip_weekends` (boolean, 可選): 略過一般週末（週六日且說明為空或「週末」），仍保留落在週末的具名假日。預設 `false`
+
+**回傳：**
+```json
+{
+  "success": true,
+  "data": {
+    "found": true,
+    "count": 2,
+    "fromDate": "2026-01-01",
+    "searchedThrough": "2026-12-31",
+    "truncatedByData": false,
+    "holidays": [
+      { "date": "2026-01-03", "week": "六", "description": "週末" },
+      { "date": "2026-01-04", "week": "日", "description": "週末" }
+    ]
+  },
+  "tool": "get_next_holidays"
+}
+```
+
+`searchedThrough` 是這次實際搜到的最後一天。`truncatedByData` 為 `true` 時，365 天視窗被上游最後一個已發布年度截斷，回傳筆數少於 `count` 不代表後面沒有假期。
+
+找不到、而且搜尋窗裡真的沒有假期時，`found` 為 `false`、`holidays` 為 `[]`，並帶 `message: "查無假期"`。起算日晚於已發布資料時，訊息改為 `上游最新資料只到 N 年`。一般週末的空說明會顯示為「週末」。補班日不是假期，不會出現在這份清單。
+
+#### `get_workdays`
+
+計算工作天數。可查整月，或查一段日期（含起迄日）。請擇一，不要同時指定。語意對齊 CLI 的 `holiday workdays` 與 `holiday between`：
+
+- 週末與 `isHoliday: true` 的日子計入 `holidays`，不計入 `workdays`
+- `workdays = totalDays - holidays`
+- 補班日（說明含「補行上班」）不是假期，因此算工作天；`makeupWorkdays` 是這些日子的筆數，`makeupWorkdayDates` 列出日期
+
+**整月參數：**
+- `year` (integer): 年份
+- `month` (integer): 月份 1-12
+
+**區間參數：**
+- `start_date` (string): 起日，`YYYY-MM-DD` 或 `YYYYMMDD`
+- `end_date` (string): 迄日，同一格式
+
+**整月回傳：**
+```json
+{
+  "success": true,
+  "data": {
+    "year": 2024,
+    "month": 1,
+    "totalDays": 31,
+    "workdays": 22,
+    "holidays": 9,
+    "makeupWorkdays": 1,
+    "makeupWorkdayDates": [
+      { "date": "2024-01-06", "week": "六", "description": "補行上班" }
+    ]
+  },
+  "tool": "get_workdays"
+}
+```
+
+**區間回傳：**
+```json
+{
+  "success": true,
+  "data": {
+    "startDate": "2024-01-06",
+    "endDate": "2024-01-07",
+    "totalDays": 2,
+    "workdays": 1,
+    "holidays": 1,
+    "makeupWorkdays": 1,
+    "makeupWorkdayDates": [
+      { "date": "2024-01-06", "week": "六", "description": "補行上班" }
+    ]
+  },
+  "tool": "get_workdays"
+}
+```
+
+`totalDays` 在整月查詢是該月的日曆天數（閏年二月為 29）。上游該範圍的筆數必須剛好等於日曆天數；少一天或多一天都會回錯誤（例如 `上游 2024 年 2 月 資料不完整（預期 29 筆，實得 2 筆）`），不會把缺的日子當成工作天。
 
 ### MCP 資源
 

@@ -211,10 +211,12 @@ export class GracefulShutdown {
    * 記錄訊息
    */
   private log(message: string): void {
+    const line = `[GracefulShutdown] ${message}`;
     if (this.options.logger) {
-      this.options.logger(`[GracefulShutdown] ${message}`);
+      this.options.logger(line);
     } else {
-      console.log(`[GracefulShutdown] ${message}`);
+      // MCP stdio 保留 stdout 給 JSON-RPC，關機日誌只能走 stderr。
+      console.error(line);
     }
   }
 
@@ -272,6 +274,7 @@ export class DefaultShutdownHandlers {
       
       const remainingRequests = getActiveRequestCount();
       if (remainingRequests > 0) {
+        // console.warn 寫入 stderr，不會污染 MCP stdout。
         console.warn(`Shutdown with ${remainingRequests} active requests still pending`);
       }
     };
