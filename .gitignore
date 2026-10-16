@@ -13,6 +13,10 @@ dist-test/
 coverage/
 *.lcov
 
+# Mutation testing output (Stryker is local-only; not part of CI)
+.stryker-tmp/
+reports/
+
 # Environment variables
 .env
 .env.local

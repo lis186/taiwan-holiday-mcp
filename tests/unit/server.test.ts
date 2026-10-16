@@ -110,6 +110,84 @@ describe('TaiwanHolidayMcpServer', () => {
     test('應該具有 run 方法', () => {
       expect(typeof server.run).toBe('function');
     });
+
+    test('測試環境不註冊關機處理，避免佔用 stdout', () => {
+      expect((server as unknown as { gracefulShutdown?: unknown }).gracefulShutdown).toBeUndefined();
+    });
+
+    test('只拿掉 JEST_WORKER_ID 時仍因 NODE_ENV=test 而略過關機註冊', () => {
+      const previousWorker = process.env.JEST_WORKER_ID;
+      delete process.env.JEST_WORKER_ID;
+      try {
+        const withoutWorker = new TaiwanHolidayMcpServer();
+        expect((withoutWorker as unknown as { gracefulShutdown?: unknown }).gracefulShutdown).toBeUndefined();
+      } finally {
+        if (previousWorker === undefined) {
+          delete process.env.JEST_WORKER_ID;
+        } else {
+          process.env.JEST_WORKER_ID = previousWorker;
+        }
+      }
+    });
+
+    test('正式環境仍因 JEST_WORKER_ID 而略過關機註冊', () => {
+      const previousNodeEnv = process.env.NODE_ENV;
+      process.env.NODE_ENV = 'production';
+      try {
+        const productionInWorker = new TaiwanHolidayMcpServer();
+        expect((productionInWorker as unknown as { gracefulShutdown?: unknown }).gracefulShutdown).toBeUndefined();
+      } finally {
+        process.env.NODE_ENV = previousNodeEnv;
+      }
+    });
+
+    test('正式環境的關機日誌走 stderr', async () => {
+      const previousNodeEnv = process.env.NODE_ENV;
+      const previousWorker = process.env.JEST_WORKER_ID;
+      process.env.NODE_ENV = 'production';
+      delete process.env.JEST_WORKER_ID;
+
+      mockHolidayService.clearExpiredCache = jest.fn();
+      mockHolidayService.destroy = jest.fn();
+
+      const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+      const logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+      const exitSpy = jest.spyOn(process, 'exit').mockImplementation((() => undefined) as () => never);
+      jest.useFakeTimers();
+
+      try {
+        const productionServer = new TaiwanHolidayMcpServer();
+        const shutdown = (productionServer as unknown as {
+          gracefulShutdown?: { shutdown: (signal: string) => Promise<void> };
+        }).gracefulShutdown;
+        expect(shutdown).toBeDefined();
+
+        const pending = shutdown!.shutdown('TEST');
+        await jest.advanceTimersByTimeAsync(1000);
+        await pending;
+
+        const stderr = errorSpy.mock.calls.map((call) => String(call[0]));
+        const stdout = logSpy.mock.calls.map((call) => String(call[0]));
+        expect(stderr.some((message) => message.includes('[GracefulShutdown]'))).toBe(true);
+        expect(stderr.some((message) => message.includes('Waiting 1000ms'))).toBe(true);
+        expect(stdout.some((message) => message.includes('[GracefulShutdown]'))).toBe(false);
+      } finally {
+        jest.useRealTimers();
+        process.env.NODE_ENV = previousNodeEnv;
+        if (previousWorker === undefined) {
+          delete process.env.JEST_WORKER_ID;
+        } else {
+          process.env.JEST_WORKER_ID = previousWorker;
+        }
+        errorSpy.mockRestore();
+        logSpy.mockRestore();
+        exitSpy.mockRestore();
+        process.removeAllListeners('SIGTERM');
+        process.removeAllListeners('SIGINT');
+        process.removeAllListeners('uncaughtException');
+        process.removeAllListeners('unhandledRejection');
+      }
+    });
   });
 
   describe('工具列表處理', () => {
@@ -436,6 +514,7 @@ describe('TaiwanHolidayMcpServer', () => {
         expect(data.success).toBe(true);
         expect(data.tool).toBe('get_next_holidays');
         expect(data.data.holidays[0].description).toBe('週末');
+        expect(result.content[0].type).toBe('text');
       });
 
       test('省略參數時應交給服務使用預設值', async () => {
@@ -512,6 +591,7 @@ describe('TaiwanHolidayMcpServer', () => {
         expect(data.tool).toBe('get_workdays');
         expect(data.data.makeupWorkdays).toBe(1);
         expect(data.data.workdays).toBe(23);
+        expect(result.content[0].type).toBe('text');
       });
 
       test('應該查詢日期區間工作天', async () => {
@@ -592,6 +672,64 @@ describe('TaiwanHolidayMcpServer', () => {
         });
         expect(missingStart.isError).toBe(true);
         expect(missingStart.content[0].text).toContain('缺少必要參數：start_date');
+      });
+
+      test('只有年份時應該回報缺少 month', async () => {
+        const result = await toolHandler({
+          params: { name: 'get_workdays', arguments: { year: 2024 } }
+        });
+
+        expect(result.isError).toBe(true);
+        expect(result.content[0].text).toContain('缺少必要參數：month');
+        expect(mockHolidayService.getWorkdaysStats).not.toHaveBeenCalled();
+      });
+
+      test('年份或月份不是整數時應該拒絕', async () => {
+        const stringYear = await toolHandler({
+          params: { name: 'get_workdays', arguments: { year: '2024', month: 1 } }
+        });
+        expect(stringYear.isError).toBe(true);
+        expect(stringYear.content[0].text).toContain('缺少必要參數：year');
+
+        const stringMonth = await toolHandler({
+          params: { name: 'get_workdays', arguments: { year: 2024, month: '1' } }
+        });
+        expect(stringMonth.isError).toBe(true);
+        expect(stringMonth.content[0].text).toContain('缺少必要參數：month');
+
+        const fractionalMonth = await toolHandler({
+          params: { name: 'get_workdays', arguments: { year: 2024, month: 1.5 } }
+        });
+        expect(fractionalMonth.isError).toBe(true);
+        expect(fractionalMonth.content[0].text).toContain('缺少必要參數：month');
+
+        const fractionalYear = await toolHandler({
+          params: { name: 'get_workdays', arguments: { year: 2024.5, month: 1 } }
+        });
+        expect(fractionalYear.isError).toBe(true);
+        expect(fractionalYear.content[0].text).toContain('缺少必要參數：year');
+        expect(mockHolidayService.getWorkdaysStats).not.toHaveBeenCalled();
+      });
+
+      test('空的起迄日應該拒絕', async () => {
+        const emptyStart = await toolHandler({
+          params: {
+            name: 'get_workdays',
+            arguments: { start_date: '', end_date: '2024-01-31' }
+          }
+        });
+        expect(emptyStart.isError).toBe(true);
+        expect(emptyStart.content[0].text).toContain('缺少必要參數：start_date');
+
+        const emptyEnd = await toolHandler({
+          params: {
+            name: 'get_workdays',
+            arguments: { start_date: '2024-01-01', end_date: '' }
+          }
+        });
+        expect(emptyEnd.isError).toBe(true);
+        expect(emptyEnd.content[0].text).toContain('缺少必要參數：end_date');
+        expect(mockHolidayService.getWorkdaysBetween).not.toHaveBeenCalled();
       });
     });
 

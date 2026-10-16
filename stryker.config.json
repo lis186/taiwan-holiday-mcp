@@ -1,0 +1,38 @@
+{
+  "$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
+  "packageManager": "npm",
+  "testRunner": "jest",
+  "coverageAnalysis": "perTest",
+  "disableTypeChecks": true,
+  "concurrency": 2,
+  "timeoutMS": 20000,
+  "timeoutFactor": 1.5,
+  "dryRunTimeoutMinutes": 10,
+  "incremental": true,
+  "incrementalFile": "reports/mutation/incremental.json",
+  "reporters": ["clear-text", "progress", "json"],
+  "jsonReporter": {
+    "fileName": "reports/mutation/mutation.json"
+  },
+  "tempDirName": ".stryker-tmp",
+  "cleanTempDir": true,
+  "ignorePatterns": ["dist", "dist-test", "coverage", "reports", ".stryker-tmp"],
+  "mutate": [
+    "src/utils/protocol-logging.ts",
+    "src/holiday-service.ts:65-97",
+    "src/holiday-service.ts:421-495",
+    "src/holiday-service.ts:501-518",
+    "src/holiday-service.ts:524-545",
+    "src/holiday-service.ts:759-783",
+    "src/utils/date-parser.ts:292-316",
+    "src/utils/graceful-shutdown.ts:213-221",
+    "src/server.ts:70-76",
+    "src/server.ts:230-234",
+    "src/server.ts:713-804"
+  ],
+  "jest": {
+    "projectType": "custom",
+    "configFile": "jest.mutation.config.js",
+    "enableFindRelatedTests": true
+  }
+}
