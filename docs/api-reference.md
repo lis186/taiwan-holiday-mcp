@@ -614,7 +614,7 @@ Taiwan Holiday MCP Server 提供完整的台灣假期查詢 API，基於 Model C
 
 #### 未發布
 - 新增 `check_typhoon_closure` 颱風假查詢工具
-- Node.js 需求改為 ≥ 20.0.0
+- Node.js 需求改為 ≥ 22.0.0（Node 18、20 皆已 EOL）
 
 #### v2.0.0 (2026-08-02)
 - 年份支援改為 runtime 探測，上限由上游資料決定

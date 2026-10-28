@@ -286,7 +286,7 @@ npm start
 
 **解決方案**：
 ```bash
-# 檢查 Node.js 版本（需要 20+）
+# 檢查 Node.js 版本（需要 22+）
 node --version
 
 # 重新安裝套件
@@ -446,5 +446,5 @@ npm run test:coverage
 
 **支援年份**: 2017 年起，上限跟隨上游資料（新年度發布即自動支援）  
 **MCP SDK**: @modelcontextprotocol/sdk ^1.13.0  
-**Node.js 需求**: ≥ 20.0.0  
+**Node.js 需求**: ≥ 22.0.0  
 **品質狀態**: 企業級生產就緒 ✅ 

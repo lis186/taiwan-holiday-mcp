@@ -643,7 +643,7 @@ private async handleGetHolidayStats(args: any): Promise<MCPResponse>
     "typescript": "^5.8.3"
   },
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=22.0.0"
   }
 }
 ```
