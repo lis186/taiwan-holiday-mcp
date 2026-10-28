@@ -71,7 +71,7 @@ export class TaiwanHolidayMcpServer {
     if (process.env.NODE_ENV !== 'test' && process.env.JEST_WORKER_ID === undefined) {
       this.gracefulShutdown = new GracefulShutdown({
         timeout: 10000, // 10 秒超時
-        logger: (message) => console.log(message),
+        logger: (message) => console.error(message),
         delay: 1000, // 1 秒延遲
       });
       this.setupShutdownHandlers();

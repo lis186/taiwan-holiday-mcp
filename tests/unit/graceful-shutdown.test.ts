@@ -145,15 +145,15 @@ describe('GracefulShutdown', () => {
       expect(logs.length).toBeGreaterThanOrEqual(0);
     });
 
-    test('沒有提供 logger 時應該使用 console.log', () => {
-      const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
+    test('沒有提供 logger 時應該寫到 stderr（console.error）', () => {
+      const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
 
       const shutdown = new GracefulShutdown({
         timeout: 5000
       });
 
-      // 創建實例時會設置 signal handlers，可能會有 log
-      expect(shutdown).toBeInstanceOf(GracefulShutdown);
+      (shutdown as any).log('測試訊息');
+      expect(consoleSpy).toHaveBeenCalledWith('[GracefulShutdown] 測試訊息');
 
       consoleSpy.mockRestore();
     });

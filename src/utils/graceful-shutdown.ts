@@ -214,7 +214,8 @@ export class GracefulShutdown {
     if (this.options.logger) {
       this.options.logger(`[GracefulShutdown] ${message}`);
     } else {
-      console.log(`[GracefulShutdown] ${message}`);
+      // stdout 是 MCP stdio 的 JSON-RPC 通道，日誌一律寫 stderr
+      console.error(`[GracefulShutdown] ${message}`);
     }
   }
 

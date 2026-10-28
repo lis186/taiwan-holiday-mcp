@@ -116,11 +116,11 @@ describe('Taiwan Holiday MCP Server Index Functions', () => {
 
   describe('Node.js 版本檢查', () => {
     test('應該接受當前 Node.js 版本', async () => {
-      // 當前版本應該 >= 18，所以不應該有版本錯誤
+      // 當前版本應該 >= 20，所以不應該有版本錯誤
       const result = await runIndexScript(['--version']);
       
       expect(result.exitCode).toBe(0);
-      expect(result.stderr).not.toContain('錯誤: 需要 Node.js 18');
+      expect(result.stderr).not.toContain('錯誤: 需要 Node.js 20');
     });
   });
 
