@@ -5,7 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Install MCP Server](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/install-mcp?name=taiwan-holiday&config=eyJjb21tYW5kIjoibnB4IHRhaXdhbi1ob2xpZGF5LW1jcCJ9)
 
-一個基於 Model Context Protocol (MCP) 的台灣假期查詢伺服器，提供準確的台灣國定假日和補班日資訊。
+一個基於 Model Context Protocol (MCP) 的台灣假期查詢伺服器，提供準確的台灣國定假日和補班日資訊，以及颱風假（天然災害停止上班上課）查詢。
 
 ## ✨ 特色功能
 
@@ -132,6 +132,15 @@ npm start
 **你：** "2025年10月份有幾個假期？有什麼重要節日嗎？"
 
 **Claude：** 會提供該月份的假期統計，包含國定假日和重要節慶資訊。
+
+#### 🌀 颱風假
+
+**你：** "颱風要來了，明天臺北市要上班嗎？"
+
+**Claude：** 會查詢明天臺北市的停班停課公告並回答：
+- 已公告停止上班上課時，說明時段（全天、下午、幾點起）
+- 只有部分區域或學制停止時，列出受影響的區域
+- 人事行政總處尚未公告時，說明「目前無法確認」，不會當成照常上班，並提醒以縣市政府公告為準
 
 ### 進階應用
 
@@ -355,7 +364,7 @@ npm run dev
 npm run test:coverage
 ```
 
-目前測試覆蓋率：**92.27%**（446 個測試案例，100% 通過）
+目前測試覆蓋率：**92.36%**（470 個測試案例通過，8 個略過）
 
 **核心模組覆蓋率**：
 - SmartCache: 98.97% ✅
@@ -388,6 +397,12 @@ npm run test:coverage
 ### 資料來源與準確性
 
 本專案的台灣假期資料來源於 [TaiwanCalendar](https://github.com/ruyut/TaiwanCalendar) 開源專案，該專案基於中華民國政府公告的官方假期資訊。
+
+颱風假（天然災害停止上班上課）資料來源：今天、明天讀行政院人事行政總處的
+[天然災害停止上班及上課情形](https://www.dgpa.gov.tw/typh/daily/nds.html) 即時頁，其他日期讀
+[TaiwanTyphoonDays](https://github.com/lis186/TaiwanTyphoonDays) 歸檔。即時頁格式並非官方承諾，
+可能隨時改變而導致無法解析；歸檔通常在事件後數天才收錄。**停班停課請以各縣市政府的正式公告為準**，
+本專案回報「無法判斷」時，不代表照常上班上課。
 
 **重要聲明：**
 

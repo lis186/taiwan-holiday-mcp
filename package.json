@@ -2,7 +2,7 @@
   "name": "taiwan-holiday-mcp",
   "version": "2.0.0",
   "mcpName": "io.github.lis186/taiwan-holiday-mcp",
-  "description": "MCP server for Taiwan holiday information",
+  "description": "MCP server for Taiwan holiday information and typhoon day-off (work/school closure) status",
   "license": "MIT",
   "author": "Justin Lee",
   "homepage": "https://github.com/lis186/taiwan-holiday-mcp",
