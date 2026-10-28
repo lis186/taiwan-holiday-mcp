@@ -615,6 +615,8 @@ describe('TaiwanHolidayMcpServer', () => {
           found: true,
           count: 1,
           fromDate: '2024-01-01',
+          searchedThrough: '2024-12-31',
+          truncatedByData: false,
           holidays: [{ date: '2024-01-07', week: '日', description: '週末' }],
         });
 
@@ -642,6 +644,8 @@ describe('TaiwanHolidayMcpServer', () => {
           found: false,
           count: 0,
           fromDate: '2026-10-16',
+          searchedThrough: '2027-10-16',
+          truncatedByData: false,
           holidays: [],
           message: '查無假期',
         });

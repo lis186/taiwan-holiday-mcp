@@ -1,6 +1,6 @@
 {
   "name": "taiwan-holiday-mcp",
-  "version": "2.1.0",
+  "version": "3.0.0",
   "mcpName": "io.github.lis186/taiwan-holiday-mcp",
   "description": "MCP server for Taiwan holidays, make-up workdays, and typhoon day-off (work/school closure) status",
   "license": "MIT",
@@ -40,7 +40,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.13.0",
-    "taiwan-holiday-cli": "^2.1.0"
+    "taiwan-holiday-cli": "^3.0.0"
   },
   "devDependencies": {
     "@stryker-mutator/core": "^8.7.1",

@@ -514,7 +514,7 @@ To the fullest extent permitted by law, the authors and contributors are not lia
 - [`taiwan-holiday-cli`](https://github.com/lis186/taiwan-holiday-cli) — command-line tool over the same data, for terminals and scripts
 - [`taiwan-holiday-skills`](https://github.com/lis186/taiwan-holiday-skills) — a packaged Claude Agent Skill (it calls the CLI)
 
-The three projects share a MAJOR version. They are currently on the 2.x line.
+The three projects share a MAJOR version. They are currently on the 3.x line.
 
 ## 📄 License
 
