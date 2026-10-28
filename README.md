@@ -11,6 +11,7 @@
 
 - 🇹🇼 **準確的台灣假期資料**：基於 [TaiwanCalendar](https://github.com/ruyut/TaiwanCalendar) 提供的政府公告假期資訊
 - 🚀 **即時查詢**：支援單日查詢、範圍查詢和統計查詢
+- 🌀 **颱風假查詢**：今天、明天讀人事行政總處即時頁，其他日期讀 2001-07-30 起的歸檔
 - 📅 **多種日期格式**：支援 `YYYY-MM-DD` 和 `YYYYMMDD` 格式
 - 🔄 **智慧快取**：自動快取資料，提升查詢效能
 - 🛠️ **MCP 標準**：完全相容 Model Context Protocol 規範
@@ -219,6 +220,45 @@ npm start
 }
 ```
 
+#### `check_typhoon_closure`
+
+查詢颱風假（天然災害停止上班上課）。判斷規則與即時頁解析由 [`taiwan-holiday-cli`](https://github.com/lis186/taiwan-holiday-cli) 提供，
+欄位語意見該專案 README 的「颱風假查詢」一節。
+
+**資料來源：** 今天、明天讀 [DGPA 天然災害停止上班及上課情形](https://www.dgpa.gov.tw/typh/daily/nds.html) 即時頁；
+其他日期讀 [TaiwanTyphoonDays](https://github.com/lis186/TaiwanTyphoonDays) 歸檔（2001-07-30 起）。
+
+**參數：**
+- `date` (string, 可選): `today`、`tomorrow`、`YYYY-MM-DD` 或 `YYYYMMDD`，省略為今天（臺灣時間）
+- `city` (string, 可選): 縣市名稱，台／臺視為相同；省略為全國
+
+**回傳：** `summary` 為一行結論，`data` 為完整的 `TyphoonQueryResult`。
+
+```json
+{
+  "success": true,
+  "summary": "2024-10-31 臺北市：停止上班（全天）、停止上課（全天）〔已定案〕",
+  "data": {
+    "date": "20241031",
+    "city": "臺北市",
+    "work": { "status": "stopped", "period": "allDay", "from": "" },
+    "school": { "status": "stopped", "period": "allDay", "from": "" },
+    "basis": "own",
+    "reason": null,
+    "source": {...},
+    "cities": [...],
+    "notes": [...]
+  }
+}
+```
+
+**判讀重點：**
+- `status` 為 `unknown` 時代表無法判斷，**不可當成照常上班上課**。
+- `conditional` 表示只有部分地區、學制或時段停止，要看 `cities[].rows`。
+- `reason` 不是 `null` 時結果仍可能改變（`live` 為即時頁，當天仍可能更新）。
+- 昨天到 21 天前常是 `unknown`／`pending`：即時頁只有今天與明天，歸檔通常延遲數天才收錄。
+- 請以各縣市政府公告為準。
+
 ### MCP 資源
 
 伺服器提供以下資源：
@@ -237,7 +277,7 @@ npm start
 
 **解決方案**：
 ```bash
-# 檢查 Node.js 版本（需要 18+）
+# 檢查 Node.js 版本（需要 20+）
 node --version
 
 # 重新安裝套件
@@ -391,5 +431,5 @@ npm run test:coverage
 
 **支援年份**: 2017 年起，上限跟隨上游資料（新年度發布即自動支援）  
 **MCP SDK**: @modelcontextprotocol/sdk ^1.13.0  
-**Node.js 需求**: ≥ 18.0.0  
+**Node.js 需求**: ≥ 20.0.0  
 **品質狀態**: 企業級生產就緒 ✅ 

@@ -30,6 +30,7 @@ export default {
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
     '^@tests/(.*)$': '<rootDir>/tests/$1',
+    '^taiwan-holiday-cli$': '<rootDir>/tests/mocks/taiwan-holiday-cli.ts',
     '^(\\.{1,2}/.*)\\.js$': '$1'
   },
 

@@ -38,7 +38,8 @@
     "typecheck:tests": "tsc -p tsconfig.test.json --noEmit"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.13.0"
+    "@modelcontextprotocol/sdk": "^1.13.0",
+    "taiwan-holiday-cli": "^2.1.0"
   },
   "devDependencies": {
     "@types/jest": "^29.5.14",
@@ -54,7 +55,7 @@
     "typescript": "^5.8.3"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=20.0.0"
   },
   "keywords": [
     "mcp",

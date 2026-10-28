@@ -5,6 +5,20 @@
 格式基於 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.0.0/)，
 並且本專案遵循 [語意化版本](https://semver.org/lang/zh-TW/)。
 
+## [Unreleased]
+
+### 新增
+
+- `check_typhoon_closure` 工具：查詢颱風假（天然災害停止上班上課），可選 `date`（預設今天）與 `city`。
+  今天、明天讀 DGPA 即時頁，其他日期讀 2001-07-30 起的 TaiwanTyphoonDays 歸檔。
+  判斷規則直接依賴 `taiwan-holiday-cli@^2.1.0` 的函式庫匯出，避免兩邊漂移；
+  工具描述明定 `unknown` 不可當成照常。
+
+### 變更
+
+- `engines.node` 由 `>=18.0.0` 改為 `>=20.0.0`，與 `taiwan-holiday-cli` 一致（Node 18 已 EOL）。
+- 新增執行期依賴 `taiwan-holiday-cli`。
+
 ## [2.0.0] - 2026-08-02
 
 年份支援不再寫死在套件裡，並修正兩個長期存在的統計錯誤。
