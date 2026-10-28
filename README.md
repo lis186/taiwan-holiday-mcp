@@ -517,7 +517,7 @@ npm run test:coverage
 - [`taiwan-holiday-cli`](https://github.com/lis186/taiwan-holiday-cli) —— 同一資料來源的命令列工具，適合終端機與腳本使用
 - [`taiwan-holiday-skills`](https://github.com/lis186/taiwan-holiday-skills) —— 打包好的 Claude Agent Skill（底層透過 CLI 呼叫）
 
-三個專案共享 MAJOR 版號，目前為 2.x 世代。
+三個專案共享 MAJOR 版號，目前為 3.x 世代。
 
 ## 📄 授權條款
 
