@@ -13,6 +13,7 @@ An MCP (Model Context Protocol) server for looking up Taiwan holidays. It return
 
 - 🇹🇼 **Accurate Taiwan holiday data**: government-published dates from [TaiwanCalendar](https://github.com/ruyut/TaiwanCalendar)
 - 🚀 **Live queries**: a single day, a date range, the next holidays, workdays (including make-up workdays), and statistics
+- 🌀 **Typhoon day-off status**: today and tomorrow from the DGPA live page, other dates from the archive (since 2001-07-30)
 - 📅 **Several date formats**: `YYYY-MM-DD` and `YYYYMMDD`
 - 🔄 **Smart cache**: responses are cached automatically so repeat lookups stay fast
 - 🛠️ **MCP compliant**: follows the Model Context Protocol
@@ -127,6 +128,15 @@ After setup, ask in natural language. English prompts work; the holiday names in
 **You:** "Do I have to work next Monday, October 6, 2025?" (下週一（2025年10月6日）需要上班嗎？)
 
 **The assistant** checks that date and says whether it is a workday. If it is a holiday, it includes the reason.
+
+#### 🌀 Typhoon day off
+
+**You:** "A typhoon is coming. Do I have to work in Taipei tomorrow?" (颱風要來了，明天臺北市要上班嗎？)
+
+**The assistant** looks up tomorrow's work and school closure announcements for Taipei:
+- If work and school are suspended, it gives the period (all day, afternoon, or from a set time).
+- If only some districts or school levels are affected, it lists them.
+- If nothing has been announced yet, it says it cannot confirm. It does not treat that as a normal workday, and it points you to the city government's announcement.
 
 #### 📈 Holiday stats
 
@@ -313,6 +323,43 @@ Count workdays for a whole month, or for an inclusive date range. Pass one mode 
 
 For a whole month, `totalDays` is the number of calendar days (29 in a leap-year February). The upstream record count for that range must equal the calendar length. One day short or one day extra is an error — for example `上游 2024 年 2 月 資料不完整（預期 29 筆，實得 2 筆）` ("upstream February 2024 data is incomplete: expected 29 records, got 2") — and missing days are not treated as workdays.
 
+#### `check_typhoon_closure`
+
+Look up typhoon day-off status (天然災害停止上班上課: work and school suspended because of a natural disaster). The rules and the live-page parser come from [`taiwan-holiday-cli`](https://github.com/lis186/taiwan-holiday-cli); see the 「颱風假查詢」 section of its README for field semantics.
+
+**Sources:** today and tomorrow come from the DGPA live page, [天然災害停止上班及上課情形](https://www.dgpa.gov.tw/typh/daily/nds.html). Other dates come from the [TaiwanTyphoonDays](https://github.com/lis186/TaiwanTyphoonDays) archive (since 2001-07-30).
+
+**Parameters:**
+- `date` (string, optional): `today`, `tomorrow`, `YYYY-MM-DD`, or `YYYYMMDD`. Defaults to today in Taiwan time
+- `city` (string, optional): city or county name; 台 and 臺 are treated the same. Omit it for all of Taiwan
+
+**Returns:** `summary` is a one-line verdict and `data` is the full `TyphoonQueryResult`.
+
+```json
+{
+  "success": true,
+  "summary": "2024-10-31 臺北市：停止上班（全天）、停止上課（全天）〔已定案〕",
+  "data": {
+    "date": "20241031",
+    "city": "臺北市",
+    "work": { "status": "stopped", "period": "allDay", "from": "" },
+    "school": { "status": "stopped", "period": "allDay", "from": "" },
+    "basis": "own",
+    "reason": null,
+    "source": {...},
+    "cities": [...],
+    "notes": [...]
+  }
+}
+```
+
+**How to read it:**
+- `status: "unknown"` means the status cannot be determined. **Never treat it as a normal day.**
+- `conditional` means only some districts, school levels, or time periods are affected; check `cities[].rows`.
+- A non-null `reason` means the result can still change (`live` is the live page, which can update during the day).
+- Dates from yesterday back to 21 days ago are often `unknown` / `pending`: the live page only covers today and tomorrow, and the archive usually lags by a few days.
+- Follow the official announcement from each city or county government.
+
 ### MCP resources
 
 The server exposes:
@@ -331,7 +378,7 @@ The server exposes:
 
 **What to try:**
 ```bash
-# Node.js 18 or newer is required
+# Node.js 22 or newer is required
 node --version
 
 # Reinstall
@@ -407,7 +454,7 @@ npm run dev
 npm run test:coverage
 ```
 
-Current coverage: **93.84%** statements (509 tests passed, 8 skipped because of the environment)
+Current coverage: **93.68%** statements (522 tests passed, 8 skipped because of the environment)
 
 **Core modules** (statements):
 - SmartCache: 98.97% ✅
@@ -424,8 +471,8 @@ Mutation testing is opt-in and is not part of CI. Run `npm run test:mutation` (S
 - **Cached API call**: < 100ms
 - **Concurrency**: 10+ concurrent requests
 - **Memory**: < 50MB
-- **Test stability**: 509 tests passed (8 skipped because of the environment)
-- **Code coverage**: 93.84% statements (well above the common 80% bar)
+- **Test stability**: 522 tests passed (8 skipped because of the environment)
+- **Code coverage**: 93.68% statements (well above the common 80% bar)
 
 ## 🤝 Contributing
 
@@ -442,6 +489,8 @@ Contributions are welcome:
 ### Source and accuracy
 
 Taiwan holiday data comes from the open-source project [TaiwanCalendar](https://github.com/ruyut/TaiwanCalendar), which is based on official holiday announcements from the government of the Republic of China (Taiwan).
+
+Typhoon day-off data comes from the Directorate-General of Personnel Administration (DGPA) [live page](https://www.dgpa.gov.tw/typh/daily/nds.html) for today and tomorrow, and from the [TaiwanTyphoonDays](https://github.com/lis186/TaiwanTyphoonDays) archive for other dates. The live page's format is not an official interface and can change without notice; the archive usually lags the event by a few days. **For work and school closures, follow each city or county government's official announcement.** When this server reports that a status cannot be determined, that does not mean work and school go ahead as usual.
 
 **Please note:**
 
@@ -485,5 +534,5 @@ MIT. See [LICENSE](LICENSE).
 
 **Years covered**: from 2017, up to whatever the upstream data has published (a new year is picked up when it is released)  
 **MCP SDK**: @modelcontextprotocol/sdk ^1.13.0  
-**Node.js**: ≥ 18.0.0  
+**Node.js**: ≥ 22.0.0  
 **Status**: production-ready ✅

@@ -109,7 +109,7 @@ describe('套件安裝測試', () => {
     // 檢查關鍵依賴版本
     expect(packageJson.dependencies['@modelcontextprotocol/sdk']).toBeDefined();
     expect(packageJson.engines?.node).toBeDefined();
-    expect(packageJson.engines.node).toMatch(/>=18/);
+    expect(packageJson.engines.node).toMatch(/>=22/);
     
     // 檢查 bin 設定
     expect(packageJson.bin['taiwan-holiday-mcp']).toBe('dist/index.js');
@@ -184,7 +184,7 @@ describe('套件安裝測試', () => {
     expect(packageJson.scripts.prepare).toBeTruthy();
 
     // 引擎要求
-    expect(packageJson.engines.node).toMatch(/>=18/);
+    expect(packageJson.engines.node).toMatch(/>=22/);
 
     // 關鍵字
     expect(packageJson.keywords).toContain('mcp');

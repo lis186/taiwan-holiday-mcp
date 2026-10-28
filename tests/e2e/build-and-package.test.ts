@@ -165,7 +165,7 @@ describe('建置與打包完整測試', () => {
       const response = JSON.parse(result.stdout.trim());
       expect(response.jsonrpc).toBe('2.0');
       expect(response.id).toBe(1);
-      expect(response.result.tools).toHaveLength(5);
+      expect(response.result.tools).toHaveLength(6);
       
       const toolNames = response.result.tools.map((tool: any) => tool.name);
       expect(toolNames).toEqual([
@@ -174,6 +174,8 @@ describe('建置與打包完整測試', () => {
         'get_holiday_stats',
         'get_next_holidays',
         'get_workdays',
+        // 實際以 node 載入 dist，確認純 ESM 的 taiwan-holiday-cli 依賴可被匯入
+        'check_typhoon_closure',
       ]);
     });
 

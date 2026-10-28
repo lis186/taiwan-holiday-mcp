@@ -7,9 +7,10 @@ Taiwan Holiday MCP Server 提供完整的台灣假期查詢 API，基於 Model C
 ### 基本資訊
 
 - **協議版本**: MCP 1.0
-- **伺服器版本**: 1.0.0
+- **伺服器版本**: 2.1.0
 - **支援的年份範圍**: 2017 年起；上限不寫死在套件裡，由上游是否有該年度資料決定
 - **資料來源**: [TaiwanCalendar](https://github.com/ruyut/TaiwanCalendar)
+- **颱風假資料來源**: [DGPA 即時頁](https://www.dgpa.gov.tw/typh/daily/nds.html)（今天、明天）與 [TaiwanTyphoonDays](https://github.com/lis186/TaiwanTyphoonDays) 歸檔（2001-07-30 起）
 - **更新頻率**: 即時（基於政府公告）
 
 ### 連接資訊
@@ -17,7 +18,7 @@ Taiwan Holiday MCP Server 提供完整的台灣假期查詢 API，基於 Model C
 ```json
 {
   "name": "taiwan-holiday-mcp",
-  "version": "1.0.0",
+  "version": "2.1.0",
   "capabilities": {
     "tools": {},
     "resources": {}
@@ -268,6 +269,117 @@ Taiwan Holiday MCP Server 提供完整的台灣假期查詢 API，基於 Model C
 }
 ```
 
+### 4. check_typhoon_closure
+
+查詢颱風假（天然災害停止上班上課）。今天、明天讀人事行政總處（DGPA）[即時頁](https://www.dgpa.gov.tw/typh/daily/nds.html)，
+其他日期讀 [TaiwanTyphoonDays](https://github.com/lis186/TaiwanTyphoonDays) 歸檔（2001-07-30 起）。
+判斷規則由 [`taiwan-holiday-cli`](https://github.com/lis186/taiwan-holiday-cli) 提供，本工具不另行實作。
+
+#### 請求格式
+
+```json
+{
+  "method": "tools/call",
+  "params": {
+    "name": "check_typhoon_closure",
+    "arguments": {
+      "date": "2024-10-31",
+      "city": "台北市"
+    }
+  }
+}
+```
+
+#### 參數
+
+| 參數名 | 類型 | 必填 | 描述 | 格式 |
+|--------|------|------|------|------|
+| `date` | string | ❌ | 查詢日期（臺灣時間），省略為今天；最早 2001-07-30 | `today`、`tomorrow`、`YYYY-MM-DD`、`YYYYMMDD` |
+| `city` | string | ❌ | 縣市名稱，台／臺視為相同；省略為全國 | 例如 `臺北市` |
+
+縣市名保留當時名稱（如改制前的臺北縣），不對應現行行政區。
+
+#### 回應格式
+
+```json
+{
+  "success": true,
+  "summary": "2024-10-31 臺北市：停止上班（全天）、停止上課（全天）〔已定案〕",
+  "data": {
+    "date": "20241031",
+    "city": "臺北市",
+    "work": { "status": "stopped", "period": "allDay", "from": "" },
+    "school": { "status": "stopped", "period": "allDay", "from": "" },
+    "basis": "own",
+    "reason": null,
+    "source": {
+      "kind": "archive",
+      "url": "https://www.dgpa.gov.tw/information?uid=374&pid=12171",
+      "announcementDate": "20241031",
+      "updatedAt": "2024-10-31T23:38:13",
+      "fetchedAt": null
+    },
+    "cities": [
+      {
+        "city": "臺北市",
+        "work": { "status": "stopped", "period": "allDay", "from": "" },
+        "school": { "status": "stopped", "period": "allDay", "from": "" },
+        "coverage": "city",
+        "subAreas": { "stopped": 0, "total": 0 },
+        "rows": [
+          {
+            "city": "臺北市",
+            "scope": "",
+            "forDate": "20241031",
+            "work": "stop",
+            "school": "stop",
+            "period": "allDay",
+            "from": "",
+            "raw": "今天停止上班、停止上課。"
+          }
+        ]
+      }
+    ],
+    "notes": []
+  },
+  "timestamp": "2026-10-28T10:12:58.829Z",
+  "tool": "check_typhoon_closure"
+}
+```
+
+#### 回應欄位說明
+
+| 欄位 | 類型 | 描述 |
+|------|------|------|
+| `summary` | string | 一行結論，含是否定案 |
+| `data.date` | string | 查詢日 `YYYYMMDD` |
+| `data.city` | string \| null | 正規化後的縣市；未指定為 `null` |
+| `data.work` / `data.school` | object | 結論：`status`、`period`（`allDay`／`morning`／`afternoon`／`evening`／`from`）、`from`（`HH:MM`） |
+| `data.basis` | string | `own` 當日公告；`forecast` 前一天公告的預告（可能被推翻）；`no_announcement` 無公告 |
+| `data.reason` | string \| null | 結果為何仍可能改變；`null` 表示已定案 |
+| `data.source` | object | `kind`（`archive`／`live`）、公告網址、公告事件日、更新時間、即時頁抓取時間 |
+| `data.cities[]` | array | 各縣市的結論；`rows` 為原始記錄，`raw` 保留原文 |
+| `data.notes` | string[] | 給使用者與 LLM 的提醒 |
+
+`status` 的意義：
+
+| `status` | 意義 |
+|----------|------|
+| `stopped` | 全縣市停止，時段見 `period`／`from` |
+| `conditional` | 只有部分子區域、學制或時段停止，須看 `cities[].rows` 判斷是否適用；未指定縣市時只要有任何停止就是這個值 |
+| `normal` | 有公告且照常；即時頁目前沒有該縣市的公告（`reason: "live"`，之後仍可能公告）；或事件後超過 21 天仍無公告（`basis: "no_announcement"`） |
+| `unknown` | 無法判斷，**不可當成照常**。例如記錄無法解析、歸檔尚未收錄、即時頁還沒有明天的公告 |
+
+`reason` 的意義：`live`（即時頁，當天仍可能更新）、`pending`（距今 21 天內，歸檔可能尚未收錄；昨天到 21 天前常見）、`source_not_ready`（當年度資料檔尚未產生）。
+
+#### 錯誤
+
+| `errorType` | 情況 |
+|-------------|------|
+| `INVALID_DATE` | 日期格式錯誤或早於 2001-07-30 |
+| `NETWORK_ERROR` | 無法連線資料來源 |
+| `DATA_NOT_FOUND` | 歷史年度資料不存在 |
+
 ## MCP 資源 (Resources)
 
 ### 資源列表
@@ -492,12 +604,25 @@ Taiwan Holiday MCP Server 提供完整的台灣假期查詢 API，基於 Model C
 
 ### 當前版本
 
-- **API 版本**: 1.0.0
+- **API 版本**: 2.1.0
 - **MCP 協議版本**: 1.0
-- **發布日期**: 2025-06-11
-- **相容性**: 向後相容
+- **發布日期**: 2026-10-16
 
 ### 變更歷史
+
+完整內容見 [CHANGELOG.md](../CHANGELOG.md)。
+
+#### 未發布
+- 新增 `check_typhoon_closure` 颱風假查詢工具
+- Node.js 需求改為 ≥ 22.0.0（Node 18、20 皆已 EOL）
+
+#### v2.1.0 (2026-10-16)
+- 新增 `get_next_holidays`、`get_workdays` 工具
+- stdio 日誌改走 stderr，stdout 只留 JSON-RPC
+
+#### v2.0.0 (2026-08-02)
+- 年份支援改為 runtime 探測，上限由上游資料決定
+- `get_holiday_stats` 的 `nationalHolidays` 只計具名國定假日，週末移到新欄位 `weekends`（破壞性變更）
 
 #### v1.0.0 (2025-06-11)
 - 初始版本發布
@@ -553,6 +678,5 @@ async function getCachedHoliday(date) {
 
 ---
 
-**文件版本**: 1.0.0  
-**最後更新**: 2025-06-11  
+**最後更新**: 2026-10-28  
 **維護者**: Taiwan Holiday MCP Team 

@@ -151,8 +151,8 @@ async function main(): Promise<void> {
     const nodeVersion = process.version;
     const majorVersion = parseInt(nodeVersion.slice(1).split('.')[0]);
     
-    if (majorVersion < 18) {
-      console.error(`錯誤: 需要 Node.js 18 或更高版本，當前版本: ${nodeVersion}`);
+    if (majorVersion < 22) {
+      console.error(`錯誤: 需要 Node.js 22 或更高版本，當前版本: ${nodeVersion}`);
       process.exit(1);
     }
 

@@ -2,7 +2,7 @@
   "name": "taiwan-holiday-mcp",
   "version": "2.1.0",
   "mcpName": "io.github.lis186/taiwan-holiday-mcp",
-  "description": "MCP server for Taiwan holidays and make-up workdays",
+  "description": "MCP server for Taiwan holidays, make-up workdays, and typhoon day-off (work/school closure) status",
   "license": "MIT",
   "author": "Justin Lee",
   "homepage": "https://github.com/lis186/taiwan-holiday-mcp",
@@ -39,7 +39,8 @@
     "typecheck:tests": "tsc -p tsconfig.test.json --noEmit"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.13.0"
+    "@modelcontextprotocol/sdk": "^1.13.0",
+    "taiwan-holiday-cli": "^2.1.0"
   },
   "devDependencies": {
     "@stryker-mutator/core": "^8.7.1",
@@ -57,7 +58,7 @@
     "typescript": "^5.8.3"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=22.0.0"
   },
   "keywords": [
     "mcp",

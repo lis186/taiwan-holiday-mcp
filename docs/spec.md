@@ -15,7 +15,7 @@
 - **目標客戶端**：Claude Desktop, Cursor, Windsurf
 - **測試框架**：Jest 29.7.0 with ts-jest 29.2.5
 - **測試覆蓋率**：70.69% (158 個測試，100% 通過率) ✅
-- **MCP 工具狀態**：3 個工具 + 資源系統全部實作完成並通過驗證 ✅
+- **MCP 工具狀態**：4 個工具（含 `check_typhoon_closure` 颱風假查詢）+ 資源系統全部實作完成並通過驗證 ✅
 - **專案狀態**：生產就緒，Task 4.1-4.2 完成 ✅
 - **架構設計**：統一整合架構（所有工具整合在 server.ts 中）✅
 
@@ -67,7 +67,7 @@ src/tools/
 
 **實際採用架構** (統一整合):
 ```
-src/server.ts - 包含所有三個 MCP 工具的完整實作
+src/server.ts - 包含所有四個 MCP 工具的完整實作
 ```
 
 **架構優勢**:
@@ -643,7 +643,7 @@ private async handleGetHolidayStats(args: any): Promise<MCPResponse>
     "typescript": "^5.8.3"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=22.0.0"
   }
 }
 ```

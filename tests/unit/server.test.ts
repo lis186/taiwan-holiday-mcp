@@ -9,6 +9,8 @@ import {
 import { HolidayService, HolidayServiceError } from '../../src/holiday-service';
 import { ErrorType, getQueryableYearRange, getCurrentYearInTaipei } from '../../src/types';
 import { createMockHolidayStats } from '../utils/test-helpers';
+import { getTyphoonService } from 'taiwan-holiday-cli';
+import type { TyphoonQueryResult } from 'taiwan-holiday-cli';
 
 // Mock dependencies
 jest.mock('@modelcontextprotocol/sdk/server/index.js');
@@ -287,6 +289,7 @@ describe('TaiwanHolidayMcpServer', () => {
         'get_holiday_stats',
         'get_next_holidays',
         'get_workdays',
+        'check_typhoon_closure',
       ]);
 
       const byName = Object.fromEntries(
@@ -327,6 +330,24 @@ describe('TaiwanHolidayMcpServer', () => {
       
       expect(checkHolidayTool!.inputSchema.properties).toHaveProperty('date');
       expect(checkHolidayTool!.inputSchema.required).toContain('date');
+    });
+  });
+
+  describe('check_typhoon_closure 工具定義', () => {
+    test('列出工具且描述禁止把 unknown 當照常', async () => {
+      const listCall = mockServer.setRequestHandler.mock.calls.find(
+        call => (call[0] as unknown as { shape?: { method?: { value?: string } } })?.shape?.method?.value === 'tools/list'
+      );
+      const { tools } = await (listCall![1] as any)({ params: {} });
+      const tool = tools.find((t: any) => t.name === 'check_typhoon_closure');
+
+      expect(tool).toBeDefined();
+      expect(tool.inputSchema.required).toBeUndefined();
+      expect(Object.keys(tool.inputSchema.properties)).toEqual(['date', 'city']);
+      expect(tool.description).toContain('絕對不可當成「照常上班上課」');
+      expect(tool.description).toContain('cities[].rows');
+      expect(new RegExp(tool.inputSchema.properties.date.pattern).test('tomorrow')).toBe(true);
+      expect(new RegExp(tool.inputSchema.properties.date.pattern).test('2024/10/31')).toBe(false);
     });
   });
 
@@ -396,6 +417,105 @@ describe('TaiwanHolidayMcpServer', () => {
         expect(errorData.success).toBe(false);
         expect(errorData.error).toBe('無效日期格式');
         expect(errorData.errorType).toBe(ErrorType.INVALID_DATE_FORMAT);
+      });
+    });
+
+    describe('check_typhoon_closure 工具', () => {
+      const mockGetTyphoonStatus = jest.fn();
+
+      const baseResult = (overrides: Partial<TyphoonQueryResult> = {}): TyphoonQueryResult => ({
+        date: '20241031',
+        city: '臺北市',
+        work: { status: 'stopped', period: 'allDay', from: '' },
+        school: { status: 'stopped', period: 'allDay', from: '' },
+        basis: 'own',
+        reason: null,
+        source: { kind: 'archive', url: 'https://example.test', announcementDate: '20241031', updatedAt: '', fetchedAt: null },
+        cities: [],
+        notes: [],
+        ...overrides,
+      });
+
+      const call = (args: unknown) =>
+        toolHandler({ params: { name: 'check_typhoon_closure', arguments: args } });
+
+      beforeEach(() => {
+        mockGetTyphoonStatus.mockReset();
+        (getTyphoonService as jest.Mock).mockReturnValue({ getTyphoonStatus: mockGetTyphoonStatus });
+      });
+
+      test('應該回傳完整結果與已定案摘要', async () => {
+        mockGetTyphoonStatus.mockResolvedValue(baseResult());
+
+        const result = await call({ date: '2024-10-31', city: '台北市' });
+
+        expect(mockGetTyphoonStatus).toHaveBeenCalledWith('2024-10-31', '台北市');
+        const body = JSON.parse(result.content[0].text);
+        expect(body.success).toBe(true);
+        expect(body.tool).toBe('check_typhoon_closure');
+        expect(body.data.work.status).toBe('stopped');
+        expect(body.summary).toBe('2024-10-31 臺北市：停止上班（全天）、停止上課（全天）〔已定案〕');
+      });
+
+      test('省略參數時查詢今天、全國', async () => {
+        mockGetTyphoonStatus.mockResolvedValue(baseResult({ city: null }));
+
+        const result = await call(undefined);
+
+        expect(mockGetTyphoonStatus).toHaveBeenCalledWith('today', undefined);
+        expect(JSON.parse(result.content[0].text).summary).toContain(' 全國：');
+      });
+
+      test('unknown 的摘要必須明示不可視為照常', async () => {
+        mockGetTyphoonStatus.mockResolvedValue(baseResult({
+          work: { status: 'unknown', period: null, from: '' },
+          school: { status: 'unknown', period: null, from: '' },
+          basis: 'no_announcement',
+          reason: 'pending',
+        }));
+
+        const summary = JSON.parse((await call({ date: '2024-10-31' })).content[0].text).summary;
+
+        expect(summary).toContain('上班狀況無法判斷（不可視為照常）');
+        expect(summary).not.toContain('照常上班');
+        expect(summary).toContain('尚未定案');
+      });
+
+      test('conditional、live 與 from 時段的摘要', async () => {
+        mockGetTyphoonStatus.mockResolvedValue(baseResult({
+          work: { status: 'stopped', period: 'from', from: '12:00' },
+          school: { status: 'conditional', period: null, from: '' },
+          reason: 'live',
+        }));
+
+        const summary = JSON.parse((await call({ date: 'today' })).content[0].text).summary;
+
+        expect(summary).toContain('停止上班（12:00 起）');
+        expect(summary).toContain('部分停止上課');
+        expect(summary).toContain('當天仍可能更新');
+      });
+
+      test.each([
+        [2, ErrorType.INVALID_DATE],
+        [3, ErrorType.NETWORK_ERROR],
+        [4, ErrorType.DATA_NOT_FOUND],
+        [undefined, ErrorType.UNKNOWN_ERROR],
+      ])('依 CLI 錯誤的 code=%s 轉成 %s', async (code, expected) => {
+        mockGetTyphoonStatus.mockRejectedValue(Object.assign(new Error('boom'), { code }));
+
+        const result = await call({ date: '2000-01-01' });
+
+        expect(result.isError).toBe(true);
+        const body = JSON.parse(result.content[0].text);
+        expect(body.error).toBe('boom');
+        expect(body.errorType).toBe(expected);
+      });
+
+      test('參數型別錯誤時不呼叫服務', async () => {
+        const result = await call({ date: 20241031 });
+
+        expect(result.isError).toBe(true);
+        expect(mockGetTyphoonStatus).not.toHaveBeenCalled();
       });
     });
 

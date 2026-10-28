@@ -7,12 +7,13 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Install MCP Server](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/install-mcp?name=taiwan-holiday&config=eyJjb21tYW5kIjoibnB4IHRhaXdhbi1ob2xpZGF5LW1jcCJ9)
 
-一個基於 Model Context Protocol (MCP) 的台灣假期查詢伺服器，提供準確的台灣國定假日和補班日資訊。
+一個基於 Model Context Protocol (MCP) 的台灣假期查詢伺服器，提供準確的台灣國定假日和補班日資訊，以及颱風假（天然災害停止上班上課）查詢。
 
 ## ✨ 特色功能
 
 - 🇹🇼 **準確的台灣假期資料**：基於 [TaiwanCalendar](https://github.com/ruyut/TaiwanCalendar) 提供的政府公告假期資訊
 - 🚀 **即時查詢**：支援單日查詢、範圍查詢、接下來的假期、工作天（含補班日）與統計查詢
+- 🌀 **颱風假查詢**：今天、明天讀人事行政總處即時頁，其他日期讀 2001-07-30 起的歸檔
 - 📅 **多種日期格式**：支援 `YYYY-MM-DD` 和 `YYYYMMDD` 格式
 - 🔄 **智慧快取**：自動快取資料，提升查詢效能
 - 🛠️ **MCP 標準**：完全相容 Model Context Protocol 規範
@@ -133,6 +134,15 @@ npm start
 **你：** "2025年10月份有幾個假期？有什麼重要節日嗎？"
 
 **Claude：** 會提供該月份的假期統計，包含國定假日和重要節慶資訊。
+
+#### 🌀 颱風假
+
+**你：** "颱風要來了，明天臺北市要上班嗎？"
+
+**Claude：** 會查詢明天臺北市的停班停課公告並回答：
+- 已公告停止上班上課時，說明時段（全天、下午、幾點起）
+- 只有部分區域或學制停止時，列出受影響的區域
+- 人事行政總處尚未公告時，說明「目前無法確認」，不會當成照常上班，並提醒以縣市政府公告為準
 
 ### 進階應用
 
@@ -308,6 +318,44 @@ npm start
 ```
 
 `totalDays` 在整月查詢是該月的日曆天數（閏年二月為 29）。上游該範圍的筆數必須剛好等於日曆天數；少一天或多一天都會回錯誤（例如 `上游 2024 年 2 月 資料不完整（預期 29 筆，實得 2 筆）`），不會把缺的日子當成工作天。
+#### `check_typhoon_closure`
+
+查詢颱風假（天然災害停止上班上課）。判斷規則與即時頁解析由 [`taiwan-holiday-cli`](https://github.com/lis186/taiwan-holiday-cli) 提供，
+欄位語意見該專案 README 的「颱風假查詢」一節。
+
+**資料來源：** 今天、明天讀 [DGPA 天然災害停止上班及上課情形](https://www.dgpa.gov.tw/typh/daily/nds.html) 即時頁；
+其他日期讀 [TaiwanTyphoonDays](https://github.com/lis186/TaiwanTyphoonDays) 歸檔（2001-07-30 起）。
+
+**參數：**
+- `date` (string, 可選): `today`、`tomorrow`、`YYYY-MM-DD` 或 `YYYYMMDD`，省略為今天（臺灣時間）
+- `city` (string, 可選): 縣市名稱，台／臺視為相同；省略為全國
+
+**回傳：** `summary` 為一行結論，`data` 為完整的 `TyphoonQueryResult`。
+
+```json
+{
+  "success": true,
+  "summary": "2024-10-31 臺北市：停止上班（全天）、停止上課（全天）〔已定案〕",
+  "data": {
+    "date": "20241031",
+    "city": "臺北市",
+    "work": { "status": "stopped", "period": "allDay", "from": "" },
+    "school": { "status": "stopped", "period": "allDay", "from": "" },
+    "basis": "own",
+    "reason": null,
+    "source": {...},
+    "cities": [...],
+    "notes": [...]
+  }
+}
+```
+
+**判讀重點：**
+- `status` 為 `unknown` 時代表無法判斷，**不可當成照常上班上課**。
+- `conditional` 表示只有部分地區、學制或時段停止，要看 `cities[].rows`。
+- `reason` 不是 `null` 時結果仍可能改變（`live` 為即時頁，當天仍可能更新）。
+- 昨天到 21 天前常是 `unknown`／`pending`：即時頁只有今天與明天，歸檔通常延遲數天才收錄。
+- 請以各縣市政府公告為準。
 
 ### MCP 資源
 
@@ -327,7 +375,7 @@ npm start
 
 **解決方案**：
 ```bash
-# 檢查 Node.js 版本（需要 18+）
+# 檢查 Node.js 版本（需要 22+）
 node --version
 
 # 重新安裝套件
@@ -405,7 +453,7 @@ npm run dev
 npm run test:coverage
 ```
 
-目前測試覆蓋率：**93.84%** statements（509 個測試通過，另有 8 個因環境略過）
+目前測試覆蓋率：**93.68%** statements（522 個測試通過，另有 8 個因環境略過）
 
 **核心模組覆蓋率**（statements）：
 - SmartCache: 98.97% ✅
@@ -422,8 +470,8 @@ npm run test:coverage
 - **快取 API 呼叫**：< 100ms
 - **併發處理**：支援 10+ 併發請求
 - **記憶體使用**：< 50MB
-- **測試穩定性**：509 個測試通過（另有 8 個因環境略過）
-- **程式碼覆蓋率**：93.84% statements（遠超業界 80% 標準）
+- **測試穩定性**：522 個測試通過（另有 8 個因環境略過）
+- **程式碼覆蓋率**：93.68% statements（遠超業界 80% 標準）
 
 ## 🤝 貢獻指南
 
@@ -440,6 +488,12 @@ npm run test:coverage
 ### 資料來源與準確性
 
 本專案的台灣假期資料來源於 [TaiwanCalendar](https://github.com/ruyut/TaiwanCalendar) 開源專案，該專案基於中華民國政府公告的官方假期資訊。
+
+颱風假（天然災害停止上班上課）資料來源：今天、明天讀行政院人事行政總處的
+[天然災害停止上班及上課情形](https://www.dgpa.gov.tw/typh/daily/nds.html) 即時頁，其他日期讀
+[TaiwanTyphoonDays](https://github.com/lis186/TaiwanTyphoonDays) 歸檔。即時頁格式並非官方承諾，
+可能隨時改變而導致無法解析；歸檔通常在事件後數天才收錄。**停班停課請以各縣市政府的正式公告為準**，
+本專案回報「無法判斷」時，不代表照常上班上課。
 
 **重要聲明：**
 
@@ -483,5 +537,5 @@ npm run test:coverage
 
 **支援年份**: 2017 年起，上限跟隨上游資料（新年度發布即自動支援）  
 **MCP SDK**: @modelcontextprotocol/sdk ^1.13.0  
-**Node.js 需求**: ≥ 18.0.0  
+**Node.js 需求**: ≥ 22.0.0  
 **品質狀態**: 企業級生產就緒 ✅ 

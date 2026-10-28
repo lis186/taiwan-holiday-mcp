@@ -13,6 +13,8 @@ import {
   ResourceTemplate,
   TextResourceContents,
 } from '@modelcontextprotocol/sdk/types.js';
+import { getTyphoonService } from 'taiwan-holiday-cli';
+import type { TyphoonQueryResult, TyphoonVerdict } from 'taiwan-holiday-cli';
 import { HolidayService, HolidayServiceError } from './holiday-service.js';
 import { ErrorType, getQueryableYearRange, getCurrentYearInTaipei } from './types.js';
 import { HealthMonitor, DefaultHealthChecks, HealthStatus } from './utils/health-monitor.js';
@@ -208,6 +210,34 @@ export class TaiwanHolidayMcpServer {
               additionalProperties: false,
             },
           } as Tool,
+          {
+            name: 'check_typhoon_closure',
+            description: [
+              '查詢台灣颱風假（天然災害停止上班上課）。今天、明天讀行政院人事行政總處（DGPA）即時頁，其他日期讀 2001-07-30 起的歸檔。',
+              '頂層 work／school 的 status 判讀規則：',
+              '- stopped：全縣市停止，時段見 period／from。',
+              '- conditional：只有部分地區、學制或時段停止，必須逐一讀 cities[].rows 判斷是否適用使用者所在地；未指定縣市時只要有任何停止就是 conditional。',
+              '- normal：有公告且照常，或確定當日無公告。',
+              '- unknown：無法判斷。絕對不可當成「照常上班上課」回答，應告知無法確認並請使用者查看縣市政府或 DGPA 公告。',
+              'reason 非 null 代表結果仍可能改變：live 為即時頁、當天仍可能更新；pending 為歸檔可能尚未收錄（昨天到 21 天前常見）；source_not_ready 為當年度資料尚未產生。',
+              '回答時請轉述 summary 與 notes，並以各縣市政府公告為準。'
+            ].join('\n'),
+            inputSchema: {
+              type: 'object',
+              properties: {
+                date: {
+                  type: 'string',
+                  description: '要查詢的日期（臺灣時間），支援 today、tomorrow、YYYY-MM-DD 或 YYYYMMDD；省略為今天。最早 2001-07-30',
+                  pattern: '^(today|tomorrow|\\d{4}-\\d{2}-\\d{2}|\\d{8})$'
+                },
+                city: {
+                  type: 'string',
+                  description: '縣市名稱（可選），例如「臺北市」；台／臺視為相同。縣市名保留當時名稱，不對應改制前後的行政區。省略則回傳全國'
+                }
+              },
+              additionalProperties: false,
+            },
+          } as Tool,
         ],
       };
     });
@@ -232,6 +262,9 @@ export class TaiwanHolidayMcpServer {
 
           case 'get_workdays':
             return await this.handleGetWorkdays(args);
+
+          case 'check_typhoon_closure':
+            return await this.handleCheckTyphoonClosure(args);
 
           default:
             throw new Error(`未知的工具: ${name}`);
@@ -748,6 +781,45 @@ export class TaiwanHolidayMcpServer {
   }
 
   /**
+   * 處理颱風假查詢工具
+   *
+   * 判斷規則與 DGPA 即時頁解析都在 taiwan-holiday-cli，這裡只做參數驗證、
+   * 錯誤轉換與一行摘要，避免兩邊規則漂移。
+   */
+  private async handleCheckTyphoonClosure(args: any) {
+    const { date, city } = args ?? {};
+
+    if (date !== undefined && typeof date !== 'string') {
+      throw new HolidayServiceError('date 必須是字串', ErrorType.INVALID_DATE);
+    }
+    if (city !== undefined && typeof city !== 'string') {
+      throw new HolidayServiceError('city 必須是字串', ErrorType.UNKNOWN_ERROR);
+    }
+
+    let result: TyphoonQueryResult;
+    try {
+      result = await getTyphoonService().getTyphoonStatus(date ?? 'today', city || undefined);
+    } catch (error) {
+      throw toHolidayServiceError(error);
+    }
+
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify({
+            success: true,
+            summary: summarizeTyphoon(result),
+            data: result,
+            timestamp: new Date().toISOString(),
+            tool: 'check_typhoon_closure'
+          }, null, 2),
+        },
+      ],
+    };
+  }
+
+  /**
    * 處理工作天查詢（整月或日期區間，二擇一）
    */
   private async handleGetWorkdays(args: Record<string, unknown> | undefined) {
@@ -928,3 +1000,58 @@ export class TaiwanHolidayMcpServer {
 }
 
 // 注意：直接執行檢查移至 index.ts，避免測試環境問題 
+
+/**
+ * taiwan-holiday-cli 的錯誤類別沒有從套件入口匯出，改以 ExitCode（code 屬性）辨識：
+ * 2 驗證、3 網路、4 資料
+ */
+function toHolidayServiceError(error: unknown): HolidayServiceError {
+  const message = error instanceof Error ? error.message : String(error);
+  const code = (error as { code?: unknown } | null)?.code;
+  const type =
+    code === 2 ? ErrorType.INVALID_DATE :
+    code === 3 ? ErrorType.NETWORK_ERROR :
+    code === 4 ? ErrorType.DATA_NOT_FOUND :
+    ErrorType.UNKNOWN_ERROR;
+  return new HolidayServiceError(message, type, error instanceof Error ? error : undefined);
+}
+
+const TYPHOON_PERIOD_LABEL: Record<string, string> = {
+  allDay: '全天',
+  morning: '上午',
+  afternoon: '下午',
+  evening: '晚間',
+};
+
+function typhoonVerdictLabel(v: TyphoonVerdict, kind: '上班' | '上課'): string {
+  switch (v.status) {
+    case 'stopped': {
+      const p = v.period === 'from' ? `${v.from} 起` : (v.period ? TYPHOON_PERIOD_LABEL[v.period] : '');
+      return `停止${kind}${p ? `（${p}）` : ''}`;
+    }
+    case 'conditional':
+      return `部分停止${kind}（依地區、學制或時段，須看 cities[].rows）`;
+    case 'normal':
+      return `照常${kind}`;
+    default:
+      return `${kind}狀況無法判斷（不可視為照常）`;
+  }
+}
+
+function typhoonFinalityLabel(result: TyphoonQueryResult): string {
+  if (result.reason === 'live') return '即時資料，當天仍可能更新';
+  if (result.reason === 'pending') return '尚未定案，歸檔可能尚未收錄';
+  if (result.reason === 'source_not_ready') return '資料源尚未就緒';
+  if (result.basis === 'no_announcement') return '已定案：當日無停班停課公告';
+  return result.basis === 'forecast' ? '依前一日預告' : '已定案';
+}
+
+/**
+ * 一行結論，例如「2024-10-31 臺北市：停止上班（全天）、停止上課（全天）〔已定案〕」
+ */
+export function summarizeTyphoon(result: TyphoonQueryResult): string {
+  const d = result.date;
+  const date = /^\d{8}$/.test(d) ? `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6, 8)}` : d;
+  const where = result.city ?? '全國';
+  return `${date} ${where}：${typhoonVerdictLabel(result.work, '上班')}、${typhoonVerdictLabel(result.school, '上課')}〔${typhoonFinalityLabel(result)}〕`;
+}
