@@ -20,6 +20,23 @@
   22 為仍有安全更新的最舊 LTS（至 2027-04-30）。執行期版本檢查同步。
 - 新增執行期依賴 `taiwan-holiday-cli`。
 
+## [2.1.0] - 2026-10-16
+
+新增接下來的假期與工作天查詢，並修正 stdio 日誌寫進 stdout 的問題。
+
+### 新增
+
+- `get_next_holidays`：從指定日期（預設台北今天，不含當天）取接下來 N 個假期。搜尋窗最多 365 天，且不超過上游已發布的最後一年。結果帶 `searchedThrough` 與 `truncatedByData`。起算日晚於已發布資料時，訊息是「上游最新資料只到 N 年」，而不是「查無假期」。
+- `get_workdays`：計算單月或日期區間的工作天，週末與假期不算，補班日（補行上班）算工作天並另外列出。上游筆數與日曆天數不符時回報錯誤，不再把缺的日子當成工作天。
+
+### 修正
+
+- 關機日誌，以及 `console.log` / `console.info` / `console.debug`，改走 stderr。MCP stdio 的 stdout 只留 JSON-RPC。
+
+### 開發
+
+- 可選的 Stryker mutation 測試（`npm run test:mutation`），範圍是這次的新邏輯與 stderr 日誌，不進 CI。
+
 ## [2.0.0] - 2026-08-02
 
 年份支援不再寫死在套件裡，並修正兩個長期存在的統計錯誤。

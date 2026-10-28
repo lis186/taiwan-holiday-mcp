@@ -6,9 +6,13 @@
  */
 
 import { TaiwanHolidayMcpServer } from './server.js';
+import { redirectStdoutConsoleToStderr } from './utils/protocol-logging.js';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+
+// stdout 只留給 JSON-RPC。依賴或之後新增的 console.log 也必須落到 stderr。
+redirectStdoutConsoleToStderr();
 
 // 取得 package.json 版本資訊
 const __filename = fileURLToPath(import.meta.url);

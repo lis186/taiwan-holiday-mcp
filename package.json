@@ -1,8 +1,8 @@
 {
   "name": "taiwan-holiday-mcp",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "mcpName": "io.github.lis186/taiwan-holiday-mcp",
-  "description": "MCP server for Taiwan holiday information and typhoon day-off (work/school closure) status",
+  "description": "MCP server for Taiwan holidays, make-up workdays, and typhoon day-off (work/school closure) status",
   "license": "MIT",
   "author": "Justin Lee",
   "homepage": "https://github.com/lis186/taiwan-holiday-mcp",
@@ -28,6 +28,7 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
+    "test:mutation": "stryker run",
     "lint": "eslint src/**/*.ts",
     "lint:fix": "eslint src/**/*.ts --fix",
     "prepare": "npm run build",
@@ -42,6 +43,8 @@
     "taiwan-holiday-cli": "^2.1.0"
   },
   "devDependencies": {
+    "@stryker-mutator/core": "^8.7.1",
+    "@stryker-mutator/jest-runner": "^8.7.1",
     "@types/jest": "^29.5.14",
     "@types/node": "^22.10.2",
     "@typescript-eslint/eslint-plugin": "^8.18.2",
@@ -61,7 +64,9 @@
     "mcp",
     "model-context-protocol",
     "taiwan",
+    "taiwan-holidays",
     "holiday",
+    "make-up-workdays",
     "calendar",
     "claude",
     "cursor"

@@ -3,6 +3,7 @@ import {promises as fs, readFileSync } from 'fs';
 import { join } from 'path';
 import { platform } from 'os';
 import { getCurrentYearInTaipei } from '../../src/types.js';
+import { parseNpmPackJson } from './npm-pack.js';
 
 // 版本從 package.json 讀取，避免每次發版都要回來改測試裡寫死的字串
 const pkgVersion: string = JSON.parse(
@@ -164,14 +165,18 @@ describe('建置與打包完整測試', () => {
       const response = JSON.parse(result.stdout.trim());
       expect(response.jsonrpc).toBe('2.0');
       expect(response.id).toBe(1);
-      expect(response.result.tools).toHaveLength(4);
+      expect(response.result.tools).toHaveLength(6);
       
       const toolNames = response.result.tools.map((tool: any) => tool.name);
-      expect(toolNames).toContain('check_holiday');
-      expect(toolNames).toContain('get_holidays_in_range');
-      expect(toolNames).toContain('get_holiday_stats');
-      // 實際以 node 載入 dist，確認純 ESM 的 taiwan-holiday-cli 依賴可被匯入
-      expect(toolNames).toContain('check_typhoon_closure');
+      expect(toolNames).toEqual([
+        'check_holiday',
+        'get_holidays_in_range',
+        'get_holiday_stats',
+        'get_next_holidays',
+        'get_workdays',
+        // 實際以 node 載入 dist，確認純 ESM 的 taiwan-holiday-cli 依賴可被匯入
+        'check_typhoon_closure',
+      ]);
     });
 
     test('應該正確處理假期查詢', async () => {
@@ -269,31 +274,32 @@ describe('建置與打包完整測試', () => {
   });
 
   describe('套件打包測試', () => {
+    const requiredPackFiles = [
+      'package.json',
+      'README.md',
+      'LICENSE',
+      'dist/index.js',
+      'dist/index.d.ts',
+    ];
+
     test('應該能夠成功打包', async () => {
-      // npm pack --dry-run 需要先執行 build，需要更長的 timeout
-      const result = await runCommand('npm', ['run', 'package:test'], { timeout: 30000 });
-      
+      // --json 在 npm 11/12 巢狀於 npm publish 時仍列出檔案；不要依賴 lifecycle 日誌
+      const result = await runCommand('npm', ['pack', '--dry-run', '--json'], { timeout: 30000 });
+
       expect(result.exitCode).toBe(0);
-      expect(result.stdout).toContain(`taiwan-holiday-mcp-${pkgVersion}.tgz`);
-      expect(result.stdout).toContain('dist/');
-    }, 35000); // Jest 測試 timeout 略大於 runCommand timeout
+      const packed = parseNpmPackJson(result.stdout);
+      expect(packed.filename).toBe(`taiwan-holiday-mcp-${pkgVersion}.tgz`);
+      expect(packed.files).toEqual(expect.arrayContaining(requiredPackFiles));
+    }, 35000);
 
     test('打包內容應該包含必要檔案', async () => {
-      const result = await runCommand('npm', ['pack', '--dry-run'], { timeout: 15000 });
-      
+      const result = await runCommand('npm', ['pack', '--dry-run', '--json'], { timeout: 30000 });
+
       expect(result.exitCode).toBe(0);
-      
-      // 檢查是否有 tarball 檔案名稱
-      expect(result.stdout).toContain(`taiwan-holiday-mcp-${pkgVersion}.tgz`);
-      
-      // 如果有詳細內容列表，檢查必要檔案
-      if (result.stdout.includes('npm notice Tarball Contents')) {
-        expect(result.stdout).toContain('dist/index.js');
-        expect(result.stdout).toContain('dist/index.d.ts');
-        expect(result.stdout).toContain('README.md');
-        expect(result.stdout).toContain('package.json');
-      }
-    }, 20000); // Jest 測試 timeout 略大於 runCommand timeout
+      const packed = parseNpmPackJson(result.stdout);
+      expect(packed.filename).toBe(`taiwan-holiday-mcp-${pkgVersion}.tgz`);
+      expect(packed.files).toEqual(expect.arrayContaining(requiredPackFiles));
+    }, 35000);
   });
 
   // 這些測試打真實上游，屬 golden acceptance 而非 hermetic 測試。

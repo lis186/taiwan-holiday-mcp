@@ -145,17 +145,25 @@ describe('GracefulShutdown', () => {
       expect(logs.length).toBeGreaterThanOrEqual(0);
     });
 
-    test('沒有提供 logger 時應該寫到 stderr（console.error）', () => {
-      const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
+    test('沒有提供 logger 時應該把關機日誌寫到 stderr', async () => {
+      const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+      const logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+      const exitSpy = jest.spyOn(process, 'exit').mockImplementation((() => undefined) as () => never);
 
       const shutdown = new GracefulShutdown({
         timeout: 5000
       });
 
-      (shutdown as any).log('測試訊息');
-      expect(consoleSpy).toHaveBeenCalledWith('[GracefulShutdown] 測試訊息');
+      await shutdown.shutdown('TEST');
 
-      consoleSpy.mockRestore();
+      const stderrMessages = errorSpy.mock.calls.map((call) => String(call[0]));
+      const stdoutMessages = logSpy.mock.calls.map((call) => String(call[0]));
+      expect(stderrMessages.some((message) => message.includes('[GracefulShutdown]'))).toBe(true);
+      expect(stdoutMessages.some((message) => message.includes('[GracefulShutdown]'))).toBe(false);
+
+      errorSpy.mockRestore();
+      logSpy.mockRestore();
+      exitSpy.mockRestore();
     });
   });
 

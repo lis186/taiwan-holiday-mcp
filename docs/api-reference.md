@@ -7,7 +7,7 @@ Taiwan Holiday MCP Server 提供完整的台灣假期查詢 API，基於 Model C
 ### 基本資訊
 
 - **協議版本**: MCP 1.0
-- **伺服器版本**: 2.0.0
+- **伺服器版本**: 2.1.0
 - **支援的年份範圍**: 2017 年起；上限不寫死在套件裡，由上游是否有該年度資料決定
 - **資料來源**: [TaiwanCalendar](https://github.com/ruyut/TaiwanCalendar)
 - **颱風假資料來源**: [DGPA 即時頁](https://www.dgpa.gov.tw/typh/daily/nds.html)（今天、明天）與 [TaiwanTyphoonDays](https://github.com/lis186/TaiwanTyphoonDays) 歸檔（2001-07-30 起）
@@ -18,7 +18,7 @@ Taiwan Holiday MCP Server 提供完整的台灣假期查詢 API，基於 Model C
 ```json
 {
   "name": "taiwan-holiday-mcp",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "capabilities": {
     "tools": {},
     "resources": {}
@@ -604,9 +604,9 @@ Taiwan Holiday MCP Server 提供完整的台灣假期查詢 API，基於 Model C
 
 ### 當前版本
 
-- **API 版本**: 2.0.0
+- **API 版本**: 2.1.0
 - **MCP 協議版本**: 1.0
-- **發布日期**: 2026-08-02
+- **發布日期**: 2026-10-16
 
 ### 變更歷史
 
@@ -615,6 +615,10 @@ Taiwan Holiday MCP Server 提供完整的台灣假期查詢 API，基於 Model C
 #### 未發布
 - 新增 `check_typhoon_closure` 颱風假查詢工具
 - Node.js 需求改為 ≥ 22.0.0（Node 18、20 皆已 EOL）
+
+#### v2.1.0 (2026-10-16)
+- 新增 `get_next_holidays`、`get_workdays` 工具
+- stdio 日誌改走 stderr，stdout 只留 JSON-RPC
 
 #### v2.0.0 (2026-08-02)
 - 年份支援改為 runtime 探測，上限由上游資料決定

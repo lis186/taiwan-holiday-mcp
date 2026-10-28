@@ -7,6 +7,11 @@
 import {
   Holiday,
   HolidayStats,
+  WorkdaysStats,
+  WorkdaysMonthResult,
+  WorkdaysRangeResult,
+  NextHolidaysResult,
+  MakeupWorkday,
   ErrorType,
   MIN_SUPPORTED_YEAR,
   getMaxQueryableYear,
@@ -14,7 +19,17 @@ import {
   getCurrentYearInTaipei,
   HOLIDAY_TYPES
 } from './types.js';
-import { parseDate, ParsedDate, DateParseError } from './utils/date-parser.js';
+import {
+  parseDate,
+  ParsedDate,
+  DateParseError,
+  formatDate,
+  addDays,
+  inclusiveDaysBetween,
+  compareDates,
+  getTodayInTaipei,
+  getDaysInMonth,
+} from './utils/date-parser.js';
 import { CircuitBreaker, CircuitBreakerOptions, CircuitBreakerError } from './utils/circuit-breaker.js';
 import { ErrorClassifier, ErrorCategory } from './utils/error-classifier.js';
 import { RequestThrottler, ThrottleOptions } from './utils/request-throttler.js';
@@ -46,6 +61,40 @@ interface RequestOptions {
 
 /** 年份探測結果的存活時間 */
 const AVAILABLE_YEARS_TTL_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * `next` 的搜尋窗與 CLI 相同：從起算日往後 365 天，
+ * 且不超過上游實際有資料的最後一年 12/31。
+ */
+const NEXT_HOLIDAY_SEARCH_DAYS = 365;
+
+/** 單次最多回傳的假期數（約一年的每日一筆） */
+const MAX_NEXT_HOLIDAY_COUNT = 366;
+
+/**
+ * 一般週末：週六日且說明為空或只是「週末」。
+ * 週六日但有具名假日（例如春節）不是一般週末。
+ */
+function isRegularWeekend(holiday: Holiday): boolean {
+  const description = holiday.description || '';
+  return (holiday.week === '六' || holiday.week === '日')
+    && (description === '' || description === '週末');
+}
+
+function toIsoDate(normalized: string): string {
+  return `${normalized.slice(0, 4)}-${normalized.slice(4, 6)}-${normalized.slice(6, 8)}`;
+}
+
+function rethrowDateParseError(error: unknown): never {
+  if (error instanceof DateParseError) {
+    throw new HolidayServiceError(
+      `日期解析錯誤: ${error.message}`,
+      error.type,
+      error
+    );
+  }
+  throw error;
+}
 
 /**
  * 假期資料服務錯誤
@@ -360,6 +409,170 @@ export class HolidayService {
   }
 
   /**
+   * 取得起算日之後的接下來 N 個假期。
+   *
+   * 語意對齊 taiwan-holiday-cli 的 `holiday next`：
+   * - 起算日當天即使是假期也不算（嚴格大於 fromDate）
+   * - 未給日期時用台北時區的今天
+   * - 搜尋上限為起算日後 365 天，且不超過上游最後一個有資料的年份
+   * - skipWeekends 略過一般週末，保留具名假日
+   * - 一般週末的空 description 在輸出中顯示為「週末」
+   */
+  async getNextHolidays(options: {
+    fromDate?: string;
+    count?: number;
+    skipWeekends?: boolean;
+  } = {}): Promise<NextHolidaysResult> {
+    const count = options.count ?? 1;
+    if (!Number.isInteger(count) || count < 1 || count > MAX_NEXT_HOLIDAY_COUNT) {
+      throw new HolidayServiceError(
+        `count 必須是 1 到 ${MAX_NEXT_HOLIDAY_COUNT} 的整數`,
+        ErrorType.VALIDATION_ERROR
+      );
+    }
+
+    try {
+      const from = options.fromDate ? parseDate(options.fromDate) : getTodayInTaipei();
+      const fromIso = formatDate(from, 'YYYY-MM-DD');
+      const empty = (message: string): Omit<NextHolidaysResult, 'searchedThrough' | 'truncatedByData'> => ({
+        found: false,
+        count: 0,
+        fromDate: fromIso,
+        holidays: [],
+        message,
+      });
+
+      const availableYears = await this.getAvailableYears();
+      if (availableYears.length === 0) {
+        return {
+          ...empty('查無假期'),
+          searchedThrough: fromIso,
+          truncatedByData: false,
+        };
+      }
+
+      const maxYear = availableYears[availableYears.length - 1];
+      const cap = parseDate(`${maxYear}1231`);
+      const horizon = addDays(from, NEXT_HOLIDAY_SEARCH_DAYS);
+      const truncatedByData = compareDates(horizon, cap) > 0;
+      const end = truncatedByData ? cap : horizon;
+      const searchedThrough = formatDate(end, 'YYYY-MM-DD');
+
+      if (compareDates(end, from) <= 0) {
+        // 起算日已經晚於最後一個已發布年度。回「查無假期」會讓人以為那天之後沒有放假。
+        const message = from.year > maxYear
+          ? `上游最新資料只到 ${maxYear} 年`
+          : '查無假期';
+        return {
+          ...empty(message),
+          searchedThrough,
+          truncatedByData,
+        };
+      }
+
+      const holidays = await this.getHolidaysInRange(
+        formatDate(from, 'YYYY-MM-DD'),
+        formatDate(end, 'YYYY-MM-DD')
+      );
+
+      const selected: Holiday[] = [];
+      for (const holiday of holidays) {
+        if (!holiday.isHoliday || holiday.date <= from.normalized) {
+          continue;
+        }
+        if (options.skipWeekends && isRegularWeekend(holiday)) {
+          continue;
+        }
+        selected.push(holiday);
+        if (selected.length >= count) {
+          break;
+        }
+      }
+
+      const items = selected.map((holiday) => ({
+        date: toIsoDate(holiday.date),
+        week: holiday.week,
+        description: holiday.description || '週末',
+      }));
+
+      if (items.length === 0) {
+        return {
+          ...empty('查無假期'),
+          searchedThrough,
+          truncatedByData,
+        };
+      }
+
+      return {
+        found: true,
+        count: items.length,
+        fromDate: fromIso,
+        searchedThrough,
+        truncatedByData,
+        holidays: items,
+      };
+    } catch (error) {
+      rethrowDateParseError(error);
+    }
+  }
+
+  /**
+   * 計算指定月份的工作天。
+   * 語意對齊 CLI `holiday workdays`：總天數是該月日曆天數，不是資料筆數。
+   */
+  async getWorkdaysStats(year: number, month: number): Promise<WorkdaysMonthResult> {
+    if (!Number.isInteger(month) || month < 1 || month > 12) {
+      throw new HolidayServiceError(
+        `無效的月份: ${month}，月份必須在 1-12 之間`,
+        ErrorType.INVALID_MONTH
+      );
+    }
+
+    const holidays = await this.getHolidaysForYear(year);
+    const monthStr = month.toString().padStart(2, '0');
+    const inMonth = holidays.filter((holiday) => holiday.date.substring(4, 6) === monthStr);
+    const expected = getDaysInMonth(year, month);
+    this.assertCompleteDayCount(`${year} 年 ${month} 月`, expected, inMonth.length);
+
+    return {
+      year,
+      month,
+      ...this.calculateWorkdays(expected, inMonth),
+    };
+  }
+
+  /**
+   * 計算兩日期間的工作天（含起迄日）。
+   * 語意對齊 CLI `holiday between`。
+   */
+  async getWorkdaysBetween(startDate: string, endDate: string): Promise<WorkdaysRangeResult> {
+    try {
+      const start = parseDate(startDate);
+      const end = parseDate(endDate);
+
+      if (compareDates(start, end) > 0) {
+        throw new HolidayServiceError(
+          `開始日期 ${startDate} 不能晚於結束日期 ${endDate}`,
+          ErrorType.INVALID_DATE
+        );
+      }
+
+      const inRange = await this.getHolidaysInRange(startDate, endDate);
+      const startIso = formatDate(start, 'YYYY-MM-DD');
+      const endIso = formatDate(end, 'YYYY-MM-DD');
+      const expected = inclusiveDaysBetween(start, end);
+      this.assertCompleteDayCount(`${startIso} 至 ${endIso}`, expected, inRange.length);
+      return {
+        startDate: startIso,
+        endDate: endIso,
+        ...this.calculateWorkdays(expected, inRange),
+      };
+    } catch (error) {
+      rethrowDateParseError(error);
+    }
+  }
+
+  /**
    * 清除快取
    */
   clearCache(): void {
@@ -566,6 +779,48 @@ export class HolidayService {
     const endNum = end.year * 10000 + end.month * 100 + end.day;
     
     return dateNum >= startNum && dateNum <= endNum;
+  }
+
+  /**
+   * 上游若缺日，把缺的日子當成工作天會得到看起來正常的錯答案。
+   * 筆數必須剛好等於日曆天數。
+   */
+  private assertCompleteDayCount(scope: string, expected: number, actual: number): void {
+    if (actual !== expected) {
+      throw new HolidayServiceError(
+        `上游 ${scope} 資料不完整（預期 ${expected} 筆，實得 ${actual} 筆）`,
+        ErrorType.API_ERROR
+      );
+    }
+  }
+
+  /**
+   * 計算工作天。補班日以 description 含「補行上班」認定，與 CLI 相同。
+   */
+  private calculateWorkdays(totalDays: number, records: Holiday[]): WorkdaysStats {
+    let holidays = 0;
+    const makeupWorkdayDates: MakeupWorkday[] = [];
+
+    for (const record of records) {
+      if (record.isHoliday) {
+        holidays++;
+      }
+      if (record.description.includes('補行上班')) {
+        makeupWorkdayDates.push({
+          date: toIsoDate(record.date),
+          week: record.week,
+          description: record.description,
+        });
+      }
+    }
+
+    return {
+      totalDays,
+      workdays: totalDays - holidays,
+      holidays,
+      makeupWorkdays: makeupWorkdayDates.length,
+      makeupWorkdayDates,
+    };
   }
 
   /**
